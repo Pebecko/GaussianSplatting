@@ -1,0 +1,3 @@
+[submodule "external/glWrappers"]
+	path = external/glWrappers
+	url = https://github.com/Pebecko/GLWrappers.git
