@@ -7,3 +7,6 @@
 [submodule "external/stb/include/stb"]
 	path = external/stb/include/stb
 	url = https://github.com/nothings/stb.git
+[submodule "external/glfw"]
+	path = external/glfw
+	url = https://github.com/glfw/glfw.git
