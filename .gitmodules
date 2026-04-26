@@ -20,3 +20,6 @@
 [submodule "external/implot/vendor"]
 	path = external/implot/vendor
 	url = https://github.com/epezent/implot.git
+[submodule "external/tinyply"]
+	path = external/tinyply
+	url = https://github.com/ddiakopoulos/tinyply.git

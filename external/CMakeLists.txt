@@ -18,6 +18,9 @@ set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 add_subdirectory(assimp)
 
+# tinyply
+add_subdirectory(tinyply)
+
 # imgui
 add_subdirectory(imgui)
 
@@ -44,6 +47,7 @@ target_link_libraries(externalLibraries
 		glad
 		glfw
 		assimp
+		tinyply
 		imgui
 		implot
 		glWrappers
