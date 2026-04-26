@@ -1,0 +1,16 @@
+struct SphericalHarmonics {
+	float coefficients[];
+};
+
+
+struct GaussianSplat {
+	vec3 position;  // world coordinates
+	float opacity;  // blending coefficient (alpha)
+	mat3x3 covarianceMatrix;  // anisotropic covariance
+	SphericalHarmonics sphericalHarmonics;
+};
+
+
+layout(binding = ..., std430) buffer  GaussianSplats {
+	GaussianSplat gaussianSplats[];
+}

@@ -1,0 +1,269 @@
+#define SHARED_MEMORY_VALUES_PER_THREAD 2
+#define SHARED_MEMORY_BYTES_PER_THREAD (SHARED_MEMORY_VALUES_PER_THREAD * sizeof(int))
+#define INITIAL_GLOBAL_COMPARISON_BLOCK_SIZE 2ull
+
+
+
+// it would be possible to combine the kernels into one but some sort of synchronization across blocks would have to be implemented
+__global__ void intermediateGlobalMemorySwap(int* inputArray, int* outputArray, size_t arrayLength, size_t globalComparisonBlockSize, size_t comparisonBlockSize, bool arrayToAscend) {
+    size_t globalThreadIndex = blockIdx.x * blockDim.x + threadIdx.x;
+
+    size_t comparisonStep = comparisonBlockSize >> 1;
+    size_t comparisonBlockIndex = globalThreadIndex / comparisonStep;
+    size_t inComparisonBlockIndex = globalThreadIndex % comparisonStep;
+
+    size_t globalComparisonBlockIndex = globalThreadIndex / (globalComparisonBlockSize >> 1);  // each block of values only has half as many threads assosiated with it
+    bool globalComparisonBlockToAscend = (globalComparisonBlockIndex % 2) == 0;  // even -> ascending; odd -> descending  (current global comparison block would be sorted in this order if the final array was meant to be in ascending order)
+    bool finalOrderAscending = globalComparisonBlockToAscend == arrayToAscend;  // equivallence (<==>)  (if final array is meant to be in descending order flip globalComparisonBlockToAscend)
+
+    size_t globalFirstValueIndex = comparisonBlockIndex * comparisonBlockSize + inComparisonBlockIndex;
+    size_t globalSecondValueIndex = globalFirstValueIndex + comparisonStep;
+
+    int firstValue, secondValue, temp;
+
+    if (globalThreadIndex < (arrayLength >> 1)) {
+        firstValue = inputArray[globalFirstValueIndex];
+        secondValue = inputArray[globalSecondValueIndex];
+
+        // swap values if their order is wrong
+        if ((finalOrderAscending && (firstValue > secondValue)) || ((!finalOrderAscending) && (firstValue < secondValue))) {
+            temp = firstValue;
+            firstValue = secondValue;
+            secondValue = temp;
+        }
+
+        outputArray[globalFirstValueIndex] = firstValue;
+        outputArray[globalSecondValueIndex] = secondValue;
+    }
+}
+
+
+__global__ void finalSharedMemorySwaps(int* inputArray, int* outputArray, size_t arrayLength, size_t globalComparisonBlockSize, size_t initialComparisonBlockSize, bool arrayToAscend) {
+    extern __shared__ int sortingArray[];
+
+    size_t globalThreadIndex = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (globalThreadIndex >= (arrayLength >> 1)) {
+        return;
+    }
+
+    size_t initialComparisonStep = initialComparisonBlockSize >> 1;
+    size_t comparisonBlockIndex = globalThreadIndex / initialComparisonStep;
+    size_t inComparisonBlockIndex = globalThreadIndex % initialComparisonStep;
+
+    size_t globalComparisonBlockIndex = globalThreadIndex / (globalComparisonBlockSize >> 1);  // each block of values only has half as many threads assosiated with it
+    bool globalComparisonBlockToAscend = (globalComparisonBlockIndex % 2) == 0;  // even -> ascending; odd -> descending  (current global comparison block would be sorted in this order if the final array was meant to be in ascending order)
+    bool finalOrderAscending = globalComparisonBlockToAscend == arrayToAscend;  // equivallence (<==>)  (if final array is meant to be in descending order flip globalComparisonBlockToAscend)
+
+    size_t globalFirstValueIndex = comparisonBlockIndex * initialComparisonBlockSize + inComparisonBlockIndex;
+    size_t globalSecondValueIndex = globalFirstValueIndex + initialComparisonStep;
+
+    size_t firstValueIndex;
+    int firstValue, secondValue, temp;
+
+    // loading values into shared memory (each thread loads two)
+    sortingArray[inComparisonBlockIndex] = inputArray[globalFirstValueIndex];
+    sortingArray[inComparisonBlockIndex + initialComparisonStep] = inputArray[globalSecondValueIndex];
+
+    __syncthreads();  // shared memory synchronization
+
+    for (size_t comparisonStep = initialComparisonStep; comparisonStep > 0; comparisonStep >>= 1) {
+        // TODO - figure out a better way to go through the indices
+        firstValueIndex = (inComparisonBlockIndex / comparisonStep) * (comparisonStep << 1) + (inComparisonBlockIndex % comparisonStep);
+
+        firstValue = sortingArray[firstValueIndex];
+        secondValue = sortingArray[firstValueIndex + comparisonStep];
+
+        // swap values if their order is wrong
+        if ((finalOrderAscending && (firstValue > secondValue)) || ((!finalOrderAscending) && (firstValue < secondValue))) {
+            temp = firstValue;
+            firstValue = secondValue;
+            secondValue = temp;
+        }
+
+        sortingArray[firstValueIndex] = firstValue;
+        sortingArray[firstValueIndex + comparisonStep] = secondValue;
+
+        __syncthreads();  // shared memory synchronization
+    }
+
+    // storing values into global memory (each thread stores two)
+    outputArray[globalFirstValueIndex] = sortingArray[inComparisonBlockIndex];
+    outputArray[globalSecondValueIndex] = sortingArray[inComparisonBlockIndex + initialComparisonStep];
+}
+
+
+cudaError_t parallelBitonicMergeSort(int* toSortArray, int* sortedArray, size_t arrayLength, bool ascending) {
+
+    // allocate GPU resources
+    int* inputArray = 0;
+    int* outputArray = 0;
+    cudaError_t cudaStatus;
+    
+    size_t arraySize = arrayLength * sizeof(int);
+
+    // choose which GPU to run on
+    cudaStatus = cudaSetDevice(0);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaSetDevice(0) failed!");
+        goto freeGPUArrays;
+    }
+
+    // finding device properties
+    cudaDeviceProp deviceProperties;
+    cudaStatus = cudaGetDeviceProperties(&deviceProperties, 0);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaGetDeviceProperties(0) failed!");
+        goto freeGPUArrays;
+    }
+    // https://developer.download.nvidia.com/compute/DevZone/docs/html/C/doc/html/group__CUDART__DEVICE_g5aa4f47938af8276f08074d09b7d520c.html#g5aa4f47938af8276f08074d09b7d520c
+    // deviceProperties.maxThreadsPerBlock
+    // deviceProperties.sharedMemPerBlock - maximum amout of shared memory available to a thread block in bytes (shared by all thread blocks resident on a multiprocessor)
+
+    // figuring out grid and block dimensions
+    size_t maxSharedMemorySizeThreadLimit = deviceProperties.sharedMemPerBlock / SHARED_MEMORY_BYTES_PER_THREAD;
+    size_t maxThreadsPerBlockThreadLimit = deviceProperties.maxThreadsPerBlock;
+
+    size_t rawThreadsPerBlockLimit = min(maxSharedMemorySizeThreadLimit, maxThreadsPerBlockThreadLimit);
+
+    // rounding down to the nearest power of 2: floorf(log2f(val))
+    size_t threadBlockSize = 1ull << ((size_t) floor(log2((double) rawThreadsPerBlockLimit)));  // rounding down to a power of 2 (all powers of 2 >= 32 are also multiples of 32) (floor is performed by the type conversion)
+    size_t threadGridSize = (arrayLength / 2) / threadBlockSize;  // each thread has 2 assosiated values
+
+    // figuring out shared memory size
+    // each thread will need space for 2 ints in shared memory
+    size_t maxSharedMemoryValues = SHARED_MEMORY_VALUES_PER_THREAD * threadBlockSize;
+    size_t sharedMemorySizeBytes = SHARED_MEMORY_BYTES_PER_THREAD * threadBlockSize;
+
+    // allocating GPU buffers
+    cudaStatus = cudaMalloc((void**) &inputArray, arraySize);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc(inputArray) failed!");
+        goto freeGPUArrays;
+    }
+
+    cudaStatus = cudaMalloc((void**) &outputArray, arraySize);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc(outputArray) failed!");
+        goto freeGPUArrays;
+    }
+
+    // copy input values to the input buffer
+    cudaStatus = cudaMemcpy(inputArray, toSortArray, arraySize, cudaMemcpyHostToDevice);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed!");
+        goto freeGPUArrays;
+    }
+
+    // TODO - consider upgrading to a CUDA graph
+    // creating a stream
+    cudaStream_t stream;
+    cudaStatus = cudaStreamCreate(&stream);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaStreamCreate(stream) failed!");
+        goto freeGPUArrays;
+    }
+
+    // perform sort on exponentially bigger blocks
+    for (size_t globalComparisonBlockSize = INITIAL_GLOBAL_COMPARISON_BLOCK_SIZE; globalComparisonBlockSize <= arrayLength; globalComparisonBlockSize <<= 1ull) {
+        if (globalComparisonBlockSize > INITIAL_GLOBAL_COMPARISON_BLOCK_SIZE) {
+            // swap inputArray and outputArray after finalSharedMemorySwaps kernel left what is to be the new input in outputArray
+            int* temp = inputArray;
+            inputArray = outputArray;
+            outputArray = temp;
+        }
+
+        size_t comparisonBlockSize = globalComparisonBlockSize;
+        // sorting the current global blocks in global memory until the swaps can fit into shared memory
+        while (comparisonBlockSize > maxSharedMemoryValues) {
+            intermediateGlobalMemorySwap << <threadGridSize, threadBlockSize, 0, stream >> > (inputArray, outputArray, arrayLength, globalComparisonBlockSize, comparisonBlockSize, ascending);
+
+            // // check for any errors when launching the kernel
+            // cudaStatus = cudaGetLastError();
+            // if (cudaStatus != cudaSuccess) {
+            //     fprintf(stderr, "intermediateGlobalMemorySwap kernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+            //     goto freeGPUArrays;
+            // }
+            // 
+            // // cudaDeviceSynchronize waits for the kernel to finish
+            // cudaStatus = cudaDeviceSynchronize();
+            // if (cudaStatus != cudaSuccess) {
+            //     fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching intermediateGlobalMemorySwap kernel!\n", cudaStatus);
+            //     goto freeGPUArrays;
+            // }
+
+            // swap inputArray and outputArray after each step
+            int* temp = inputArray;
+            inputArray = outputArray;
+            outputArray = temp;
+
+            comparisonBlockSize >>= 1ull;
+        }
+
+        finalSharedMemorySwaps << <threadGridSize, threadBlockSize, sharedMemorySizeBytes, stream >> > (inputArray, outputArray, arrayLength, globalComparisonBlockSize, comparisonBlockSize, ascending);
+
+        // // check for any errors when launching the kernel
+        // cudaStatus = cudaGetLastError();
+        // if (cudaStatus != cudaSuccess) {
+        //     fprintf(stderr, "finalSharedMemorySwaps kernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+        //     goto freeGPUArrays;
+        // }
+        // 
+        // // cudaDeviceSynchronize waits for the kernel to finish
+        // cudaStatus = cudaDeviceSynchronize();
+        // if (cudaStatus != cudaSuccess) {
+        //     fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching finalSharedMemorySwaps kernel!\n", cudaStatus);
+        //     goto freeGPUArrays;
+        // }
+
+        // synchronizing stream
+        // could be moved after the whole sorting finishes (but it's better for debugging having it after each stage)
+        cudaStatus = cudaStreamSynchronize(stream);
+        if (cudaStatus != cudaSuccess) {
+            fprintf(stderr, "cudaStreamSynchronize(stream) failed: %s\n", cudaGetErrorString(cudaStatus));
+            goto freeGPUArrays;
+        }
+        
+        // check for any errors when launching the kernels
+        // checking error only makes sense after the stream has been synchronized
+        cudaStatus = cudaGetLastError();
+        if (cudaStatus != cudaSuccess) {
+            fprintf(stderr, "kernel launch for globalComparisonBlockSize %ull failed: %s\n", globalComparisonBlockSize, cudaGetErrorString(cudaStatus));
+            goto freeGPUArrays;
+        }
+    }
+
+    // copy result back from GPU to CPU
+    cudaStatus = cudaMemcpy(sortedArray, outputArray, arraySize, cudaMemcpyDeviceToHost);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy(device -> host) failed!");
+        goto freeGPUArrays;
+    }
+
+    // free GPU resources
+freeGPUArrays:
+    cudaFree(inputArray);
+    cudaFree(outputArray);
+    
+    return cudaStatus;
+}
+
+
+int main() {
+    int returnValue = 0;
+    cudaError_t cudaStatus;
+
+    if ((SORTED_ARRAY_LENGTH & (SORTED_ARRAY_LENGTH - 1)) != 0) {  // checking that array lenght is a power of 2
+        fprintf(stderr, "array length %d is not a power of 2!!!\n", SORTED_ARRAY_LENGTH);
+        returnValue = 1;
+        goto freeCPUArrays;
+    }
+
+    // parallel sort
+    cudaStatus = parallelBitonicMergeSort(toSortArray, paralerlySortedArray, SORTED_ARRAY_LENGTH, SORTED_ARRAY_ASCENDING_ORDER);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "parallelBitonicMergeSort() failed\n");
+        returnValue = 1;
+        goto freeCPUArrays;
+    }
+}
