@@ -1,0 +1,32 @@
+problem: novel-view synthesis
+goals:
+	* real-time rendering (30+ fps)
+	* fast optimization
+	* "realistic/detailed images"
+
+solution advantages:
+1) representation (3D gaussian splats)
+	- differentiable - easy optimization
+	- renderable using classical raster graphics techniques
+	- each splat has:
+		* 3D position
+		* opacity - \alpha
+		* anisotropic covariance
+		* spherical harmonics coefficients
+			- splat looks differently from different angles (encode color)
+
+2) optimization (of splat properties)
+	- input: sparse point cloud from structure from motion (SfM)
+	- adaptive steps control splat density - splats are sometimes added/removed during optimization
+	- result is compact but unstructured
+		- 1-5 millions of gaussians per scene
+
+3) (real-time) rendering
+	- inspired by tile based rasterization
+	- uses fast GPU sorting algorithms
+	- anisotropic splatting respects visibility ordering
+	- first sort and then render with alpha-blending (as many as necessary in backwards pass?)
+
+(first approach that achieves real-time rendering?)
+
+
