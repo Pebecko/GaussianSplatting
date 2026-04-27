@@ -12,13 +12,33 @@
 // Generate the title slide
 #title-slide()
 
-== Gaussian splatting
+== Usage 
 
-- Latency reduced by 1
+- creating a 3D scene from a set of images
 
-== Implementation details
+== Other methods
 
-#figure(
-  image("assets/test.jpg", width: 80%),
-  caption: [Vizualizace Gaussova rozostření v čase]
-)
+- NeRF
+- Point-based rendering
+- 3D reconstruction
+
+== Advantages of Gaussian Splatting
+
+- TODO
+
+== Method overview
+
+Trhee main steps:
+0. Creating a pont cloud from a set of images (using Structure from Motion)
+1. Converting the point cloud into a set of Gaussian splats and optimizing their parameters
+2. Rendering the scene from novel viewpoints
+
+== Gaussian optimization
+
+TODO
+
+== Rendering
+
+TODO
+
+== Demo
