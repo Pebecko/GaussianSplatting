@@ -1,0 +1,2 @@
+add_subdirectory(singleSplat)
+add_subdirectory(unoptimizedPointCloud)
