@@ -1,3 +1,5 @@
+#include <fstream>
+
 #include "gaussianSplatting/glProgramSetup.hpp"
 
 
@@ -10,7 +12,7 @@
 // const char* shaderSourceArray = shaderSource.c_str();
 // glShaderSource(shader, 1, &shaderSourceArray, nullptr);
 std::string readShaderFromFile(const std::filesystem::path& shaderFilepath) {
-	std::ifstream file(shaderFilepath, std::ios::in | std::ios::binary);
+	std::fstream file(shaderFilepath, std::ios::in | std::ios::binary);
 	if (!file) {
 		throw std::runtime_error("Failed to open shader file: " + shaderFilepath.string());
 	}
