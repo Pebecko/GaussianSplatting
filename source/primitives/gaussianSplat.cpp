@@ -1,32 +1,58 @@
 #include "gaussianSplatting/primitives/gaussianSplat.hpp"
 #include "gaussianSplatting/primitives/point.hpp"
-#include "gaussianSplatting/randomAttributes.hpp
+#include "gaussianSplatting/randomAttributes.hpp"
 
 
-// TODO
 SphericalHarmonics::SphericalHarmonics() { 
-
+    for (glm::vec4& coefficient : this->coefficients) {
+        coefficient = glm::vec4(0.0f);
+    }
 }
 
-// TODO
 SphericalHarmonics::SphericalHarmonics(const glm::vec3 color) {
+    for (glm::vec4& coefficient : this->coefficients) {
+        coefficient = glm::vec4(0.0f);
+    }
 
+    this->coefficients[0] = glm::vec4(color / SPHERICAL_HARMONICS_DEGREE_0_CONSTANT_0, 0.0f);
 }
 
-// TODO
-SphericalHarmonics::SphericalHarmonics(... coefficients) {
+SphericalHarmonics::SphericalHarmonics(std::span<glm::vec4> coefficients) {
+    if (coefficients.size() != SPHERICAL_HARMONICS_COEFFICIENTS_PER_CHANNEL) {
+        throw std::runtime_error("Invalid SPHERICAL_HARMONICS coefficient count");
+    }
 
+    std::copy(coefficients.begin(), coefficients.end(), this->coefficients);
 }
 
 
-// TODO
-GLfloat SphericalHarmonics::evaluate(const glm::vec3 direction) {
+glm::vec3 SphericalHarmonics::evaluate(glm::vec3 direction) const {
+    // TODO - check these constants
 
+    direction = glm::normalize(direction);
+
+    glm::vec3 color(0.0f);
+
+    // l = 0
+    color += this->coefficients[0] * SPHERICAL_HARMONICS_DEGREE_0_CONSTANT_0;
+
+    // l = 1
+    color += this->coefficients[1] * (-SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0) * direction.y;
+    color += this->coefficients[2] * SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0 * direction.z;
+    color += this->coefficients[3] * (-SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0) * direction.x;
+
+    // l = 2
+    color += this->coefficients[4] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_0 * direction.x * direction.y;
+    color += this->coefficients[5] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_1 * direction.y * direction.z;
+    color += this->coefficients[6] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_2 * (3.0f * direction.z * direction.z - 1.0f);
+    color += this->coefficients[7] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_3 * direction.x * direction.z;
+    color += this->coefficients[8] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_4 * (direction.x * direction.x - direction.y * direction.y);
+
+    return color;
 }
 
-// TODO
-glm::vec3 SphericalHarmonics::color() {
-
+glm::vec3 SphericalHarmonics::color() const {
+    return SPHERICAL_HARMONICS_DEGREE_0_CONSTANT_0 * glm::vec3(coefficients[0]);
 }
 
 
@@ -51,15 +77,11 @@ GaussianSplat::GaussianSplat(
 
 }
 
-GaussianSplat::GaussianSplat(const Point& point) {
-    this->position = point.position;
-    this->opacity = point.opacity;
-    this->covarianceRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-    this->covarianceScale = glm::vec3(point.radius);
-    this->sphericalHarmonics = SphericalHarmonics(point.color);
+GaussianSplat::GaussianSplat(const Point& point) : position(point.position), opacity(point.opacity), covarianceRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f)), covarianceScale(glm::vec3(point.radius)), sphericalHarmonics(SphericalHarmonics(point.color)) {
+
 }
 
-glm::mat3x3 GaussianSplat::covarianceMatrix() {
+glm::mat3x3 GaussianSplat::covarianceMatrix() const {
     // covariance = R * diag(scale^2) * R^T
 
     glm::mat3x3 rotationMatrix = glm::mat3_cast(this->covarianceRotation);

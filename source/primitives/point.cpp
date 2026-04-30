@@ -1,6 +1,6 @@
 #include "gaussianSplatting/primitives/point.hpp"
 #include "gaussianSplatting/primitives/gaussianSplat.hpp"
-#include "gaussianSplatting/randomAttributes.hpp
+#include "gaussianSplatting/randomAttributes.hpp"
 
 
 Point::Point() {
