@@ -2,13 +2,13 @@
 
 # TODO - disable external sample targets
 # glm
-add_subdirectory(glm)
+# add_subdirectory(glm)
 
 # stb
 add_subdirectory(stb)
 
 # glad
-add_subdirectory(glad)
+# add_subdirectory(glad)
 
 # glfw
 add_subdirectory(glfw)
@@ -41,7 +41,8 @@ add_library(externalLibraries INTERFACE)
 
 target_link_libraries(externalLibraries
 	INTERFACE
-		OpenGL::GL
+		# OpenGL::GL
+		OpenGL
 		glm::glm
 		stb
 		glad
