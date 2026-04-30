@@ -31,4 +31,21 @@ add_compile_definitions(SHADERS_DIRECTORY="${SHADERS_DIR}")
 #	git submodule update --init --recursive
 
 add_subdirectory(external)
+
+file(GLOB_RECURSE GAUSSIAN_SPLATTING_SOURCE_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp"
+)
+
+add_library(gaussianSplatting STATIC ${GAUSSIAN_SPLATTING_SOURCE_FILES})
+
+target_link_libraries(gaussianSplatting 
+	PUBLIC
+		externalLibraries
+)
+
+target_include_directories(gaussianSplatting
+	PUBLIC
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 add_subdirectory(demos)

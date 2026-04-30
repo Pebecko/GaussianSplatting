@@ -42,3 +42,8 @@ target_link_libraries(externalLibraries
 		imgui
 		implot
 )
+
+target_include_directories(externalLibraries
+	INTERFACE
+		"${CMAKE_CURRENT_SOURCE_DIR}/tinyply/source"
+)
