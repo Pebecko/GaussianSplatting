@@ -26,27 +26,27 @@ SphericalHarmonics::SphericalHarmonics(std::span<glm::vec4> coefficients) {
 }
 
 
-glm::vec3 SphericalHarmonics::evaluate(glm::vec3 direction) const {
+glm::vec3 SphericalHarmonics::evaluate(glm::vec3 viewDirection) const {
     // TODO - check these constants
 
-    direction = glm::normalize(direction);
+    viewDirection = glm::normalize(viewDirection);
 
     glm::vec3 color(0.0f);
 
     // l = 0
-    color += this->coefficients[0] * SPHERICAL_HARMONICS_DEGREE_0_CONSTANT_0;
+    color += glm::vec3(this->coefficients[0].x, this->coefficients[0].y, this->coefficients[0].z) * SPHERICAL_HARMONICS_DEGREE_0_CONSTANT_0;
 
     // l = 1
-    color += this->coefficients[1] * (-SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0) * direction.y;
-    color += this->coefficients[2] * SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0 * direction.z;
-    color += this->coefficients[3] * (-SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0) * direction.x;
+    color += glm::vec3(this->coefficients[1].x, this->coefficients[1].y, this->coefficients[1].z) * (-SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0) * viewDirection.y;
+    color += glm::vec3(this->coefficients[2].x, this->coefficients[2].y, this->coefficients[2].z) * SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0 * viewDirection.z;
+    color += glm::vec3(this->coefficients[3].x, this->coefficients[3].y, this->coefficients[3].z) * (-SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0) * viewDirection.x;
 
     // l = 2
-    color += this->coefficients[4] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_0 * direction.x * direction.y;
-    color += this->coefficients[5] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_1 * direction.y * direction.z;
-    color += this->coefficients[6] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_2 * (3.0f * direction.z * direction.z - 1.0f);
-    color += this->coefficients[7] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_3 * direction.x * direction.z;
-    color += this->coefficients[8] * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_4 * (direction.x * direction.x - direction.y * direction.y);
+    color += glm::vec3(this->coefficients[4].x, this->coefficients[4].y, this->coefficients[4].z) * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_0 * viewDirection.x * viewDirection.y;
+    color += glm::vec3(this->coefficients[5].x, this->coefficients[5].y, this->coefficients[5].z) * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_1 * viewDirection.y * viewDirection.z;
+    color += glm::vec3(this->coefficients[6].x, this->coefficients[6].y, this->coefficients[6].z) * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_2 * (3.0f * viewDirection.z * viewDirection.z - 1.0f);
+    color += glm::vec3(this->coefficients[7].x, this->coefficients[7].y, this->coefficients[7].z) * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_3 * viewDirection.x * viewDirection.z;
+    color += glm::vec3(this->coefficients[8].x, this->coefficients[8].y, this->coefficients[8].z) * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_4 * (viewDirection.x * viewDirection.x - viewDirection.y * viewDirection.y);
 
     return color;
 }

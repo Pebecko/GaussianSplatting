@@ -1,0 +1,269 @@
+#version 460
+
+
+#define RENDERING_SETTINGS_BUFFER_BINDING	0	// UBO
+
+#define GAUSSIAN_SPLATS_BUFFER_BINDING		0	// SSBO
+
+
+#define WORK_GROUP_SIZE_X 16
+#define WORK_GROUP_SIZE_Y 16
+#define WORK_GROUP_SIZE_Z 1
+
+
+#define SPHERICAL_HARMONICS_DEGREE 2
+#define SPHERICAL_HARMONICS_COEFFICIENTS_PER_CHANNEL ((SPHERICAL_HARMONICS_DEGREE + 1) * (SPHERICAL_HARMONICS_DEGREE + 1))  // coefficients per channel: (deg + 1)^2
+// #define SPHERICAL_HARMONICS_TOTAL_COEFFICIENTS 3 * SPHERICAL_HARMONICS_COEFFICIENTS_PER_CHANNEL  // total coefficients: 3 * (deg + 1)^2
+
+#define SPHERICAL_HARMONICS_DEGREE_0_CONSTANT_0 0.28209479177387814f
+#define SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0 0.4886025119029199f
+#define SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_0 1.0925484305920792f
+#define SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_1 -1.0925484305920792f
+#define SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_2 0.31539156525252005f
+#define SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_3 -1.0925484305920792f
+#define SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_4 0.5462742152960396f
+
+
+#define ACCUMULATED_OPACITY_STOPPING_VALUE 0.995f
+
+
+struct SphericalHarmonics {
+	vec4 coefficients[SPHERICAL_HARMONICS_COEFFICIENTS_PER_CHANNEL];
+};
+
+
+struct GaussianSplat {
+	vec3 position;  // world coordinates
+	float opacity;  // blending coefficient (alpha)
+	vec4 covarianceRotation;  // quat: {x, y, z, w}
+	vec3 covarianceScale;
+	float _pad0;
+	SphericalHarmonics sphericalHarmonics;
+};
+
+
+layout(local_size_x = WORK_GROUP_SIZE_X, local_size_y = WORK_GROUP_SIZE_Y, local_size_z = WORK_GROUP_SIZE_Z) in;
+
+
+
+layout(binding = GAUSSIAN_SPLATS_BUFFER_BINDING, std430) buffer GaussianSplats {
+	GaussianSplat gaussianSplats[];
+};
+
+
+layout (std140, binding = RENDERING_SETTINGS_BUFFER_BINDING) uniform RenderingSettings {
+    mat4x4 projectionMatrix;
+    mat4x4 viewMatrix;
+
+	float cameraFocalLength;
+	float cameraPixelAspectRatio;
+	vec2 cameraPrincipalPointInPixels;
+
+	float cameraNearDistance;
+	float cameraFarDistance;
+
+	int screenWidth;
+	int screenHeight;
+
+	float basePointRadius;
+
+	float _pad0[3];
+} renderingSettings;
+
+
+layout(rgba32f, binding = 0) uniform image2D outputTexture;
+
+
+vec3 evaluateSphericalHarmonics(SphericalHarmonics sphericalHarmonics, vec3 viewDirection) {
+	viewDirection = normalize(viewDirection);
+
+    vec3 color = vec3(0.0f);
+
+    // l = 0
+    color += sphericalHarmonics.coefficients[0].xyz * SPHERICAL_HARMONICS_DEGREE_0_CONSTANT_0;
+
+    // l = 1
+    color += sphericalHarmonics.coefficients[1].xyz * (-SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0) * viewDirection.y;
+    color += sphericalHarmonics.coefficients[2].xyz * SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0 * viewDirection.z;
+    color += sphericalHarmonics.coefficients[3].xyz * (-SPHERICAL_HARMONICS_DEGREE_1_CONSTANT_0) * viewDirection.x;
+
+    // l = 2
+    color += sphericalHarmonics.coefficients[4].xyz * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_0 * viewDirection.x * viewDirection.y;
+    color += sphericalHarmonics.coefficients[5].xyz * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_1 * viewDirection.y * viewDirection.z;
+    color += sphericalHarmonics.coefficients[6].xyz * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_2 * (3.0f * viewDirection.z * viewDirection.z - 1.0f);
+    color += sphericalHarmonics.coefficients[7].xyz * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_3 * viewDirection.x * viewDirection.z;
+    color += sphericalHarmonics.coefficients[8].xyz * SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_4 * (viewDirection.x * viewDirection.x - viewDirection.y * viewDirection.y);
+
+    return color;
+}
+
+
+vec2 projectGaussianMean(
+	mat4x4 viewMatrix, 
+	float cameraFocalLength,
+	float cameraPixelAspectRatio,
+	vec4 gaussianMean_worldCoordinates
+) {
+	vec3 gaussianMean_cameraCoordinates = (viewMatrix * gaussianMean_worldCoordinates).xyz;
+
+	return vec2(
+		(cameraPixelAspectRatio * cameraFocalLength) * gaussianMean_cameraCoordinates.x / gaussianMean_cameraCoordinates.z,
+		cameraFocalLength * gaussianMean_cameraCoordinates.y / gaussianMean_cameraCoordinates.z
+	);
+}
+
+mat3x3 quatToMat3x3(vec4 quat) {
+	float quat_xx = quat.x * quat.x;
+	float quat_yy = quat.y * quat.y;
+	float quat_zz = quat.z * quat.z;
+	float quat_xz = quat.x * quat.z;
+	float quat_xy = quat.x * quat.y;
+	float quat_yz = quat.y * quat.z;
+	float quat_wx = quat.w * quat.x;
+	float quat_wy = quat.w * quat.y;
+	float quat_wz = quat.w * quat.z;
+
+	// this might need to be transposed
+	return mat3x3(
+		1.0f - 2.0f * (quat_yy + quat_zz),
+		2.0f * (quat_xy + quat_wz),
+		2.0f * (quat_xz - quat_wy),
+
+		2.0f * (quat_xy - quat_wz),
+		1.0f - 2.0f * (quat_xx + quat_zz),
+		2.0f * (quat_yz + quat_wx),
+		
+		2.0f * (quat_xz + quat_wy),
+		2.0f * (quat_yz - quat_wx),
+		1.0f - 2.0f * (quat_xx +  quat_yy)
+	);
+}
+
+mat3x3 gaussianSplatCovarianceMatrix3d(vec4 covarianceRotation, vec3 covarianceScale) {
+	mat3x3 rotationMatrix = quatToMat3x3(covarianceRotation);
+
+	vec3 scaleSquared = covarianceScale * covarianceScale;
+
+	mat3x3 scaleMatrix = mat3x3(
+		scaleSquared.x, 0.0f, 0.0f,
+		0.0f, scaleSquared.y, 0.0f,
+		0.0f, 0.0f, scaleSquared.z
+	);
+
+	return rotationMatrix * scaleMatrix * transpose(rotationMatrix);
+}
+
+mat2x2 projectGaussianCovariance(
+	mat4x4 viewMatrix, 
+	float focalLength,
+	float pixelAspectRatio,
+	//GLfloat skewAngleRadians,
+	mat3x3 covarianceMatrix_worldCoordinates,
+	vec3 covarianceMean_worldCoordinates
+) {
+	// TODO - chech that this picks the top left 3x3 submatrix
+	mat3x3 viewMatrixLinearTransform = mat3x3(
+		vec4(viewMatrix.x).xyz,
+		vec4(viewMatrix.y).xyz,
+		vec4(viewMatrix.z).xyz
+//		viewMatrix[0][0], viewMatrix[0][1], viewMatrix[0][2],
+//		viewMatrix[1][0], viewMatrix[1][1], viewMatrix[1][2],
+//		viewMatrix[2][0], viewMatrix[2][1], viewMatrix[2][2]
+	);
+
+	mat3x3 covarianceMatrix_cameraCoordinates = viewMatrixLinearTransform * covarianceMatrix_worldCoordinates * transpose(viewMatrixLinearTransform);
+
+	// TODO
+	mat3x2 projectionJacobianMatrix = mat3x2(
+		pixelAspectRatio * focalLength / covarianceMean_worldCoordinates.z, 0.0f, (-pixelAspectRatio * focalLength * covarianceMean_worldCoordinates.x) / (covarianceMean_worldCoordinates.z * covarianceMean_worldCoordinates.z),
+		0.0f, focalLength / covarianceMean_worldCoordinates.z, (-focalLength * covarianceMean_worldCoordinates.y) / (covarianceMean_worldCoordinates.z * covarianceMean_worldCoordinates.z)
+	);  // 2 rows, 3 columns
+
+	return projectionJacobianMatrix * covarianceMatrix_cameraCoordinates * transpose(projectionJacobianMatrix);
+}
+
+
+// TODO - correct this
+float findGaussianWeight(mat2 inverseCovarianceMatrix2d, vec2 pixelScreenCoordinate, vec2 covarianceMeanScreenCoordinate) {
+	vec2 meanToPixel = pixelScreenCoordinate - covarianceMeanScreenCoordinate;
+		
+    return exp(-0.5 * dot(meanToPixel, inverseCovarianceMatrix2d * meanToPixel));		
+}
+
+
+// built in variables (https://wikis.khronos.org/opengl/Compute_Shader)
+// in uvec3 gl_NumWorkGroups
+// in uvec3 gl_WorkGroupSize
+// 
+// in uvec3 gl_WorkGroupID
+// in uvec3 gl_GlobalInvocationID
+// in uvec3 gl_LocalInvocationID
+
+// in uint gl_LocalInvocationIndex
+
+
+void main() {
+	uvec2 pixelCoordinates = gl_GlobalInvocationID.xy;
+//	vec2 normalizedPixelCoordinates = pixelCoordinates / vec2(renderingSettings.screenWidth, renderingSettings.screenHeight);
+	vec2 normalizedPixelCoordinates = pixelCoordinates / vec2(200, 200);
+
+	// coordinates out of screen
+//	if (pixelCoordinates.x >= renderingSettings.screenWidth || pixelCoordinates.y >= renderingSettings.screenHeight) {
+	if (pixelCoordinates.x >= 200 || pixelCoordinates.y >= 200) {
+		return;
+	}
+
+	// TODO - check this
+	vec3 viewDirection = (inverse(renderingSettings.viewMatrix) * vec4(0.0f, 0.0f, -1.0f, 1.0f)).xyz;
+
+	vec3 accumulatedColor = vec3(0.0f);
+	float accumulatedOpacity = 0.0f;
+
+	for (uint gaussianSplatIndex = 0u; gaussianSplatIndex < gaussianSplats.length(); ++gaussianSplatIndex) {
+		GaussianSplat gaussianSplat = gaussianSplats[gaussianSplatIndex];
+		
+		mat3x3 covarianceMatrix3d_worldCoordinates = gaussianSplatCovarianceMatrix3d(
+			gaussianSplat.covarianceRotation, 
+			gaussianSplat.covarianceScale
+		);
+		mat2x2 projectedCovarianceMatrix2d = projectGaussianCovariance(
+			renderingSettings.viewMatrix, 
+			renderingSettings.cameraFocalLength, 
+			renderingSettings.cameraPixelAspectRatio, 
+			covarianceMatrix3d_worldCoordinates,
+			gaussianSplat.position
+		);
+
+		vec2 projectedMean2d = projectGaussianMean(
+			renderingSettings.viewMatrix,
+			renderingSettings.cameraFocalLength,
+			renderingSettings.cameraPixelAspectRatio,
+			vec4(gaussianSplat.position, 1.0f)
+		);
+
+		vec3 projectedGaussianColor = evaluateSphericalHarmonics(gaussianSplat.sphericalHarmonics, viewDirection);
+		float projectedGaussianOpacity = gaussianSplat.opacity * findGaussianWeight(
+			inverse(projectedCovarianceMatrix2d),
+			normalizedPixelCoordinates,
+			projectedMean2d
+		);
+
+		float mixingWeight = (1.0f - accumulatedOpacity) * projectedGaussianOpacity;
+
+		// standard alpha blending:
+		//	 color_final = alpha_new * color_new + (1 - alpha_new) * color_old
+
+		accumulatedColor += mixingWeight * projectedGaussianColor;
+		accumulatedOpacity += mixingWeight;
+
+		if (accumulatedOpacity > ACCUMULATED_OPACITY_STOPPING_VALUE) {
+			break;
+		}
+	}
+	
+	// TODO - for tile debugging render splats with color based on tile index
+
+	// write accumulated color into texture
+//	imageStore(outputTexture, ivec2(pixelCoordinates), vec4(accumulatedColor, accumulatedOpacity));
+	imageStore(outputTexture, ivec2(pixelCoordinates), vec4(vec3(normalizedPixelCoordinates, 1.0f), 1.0f));
+}

@@ -267,3 +267,7 @@ int main() {
         goto freeCPUArrays;
     }
 }
+
+
+// use gaussian mean projected to view space to sort the gaussians
+depth = mu_cam.z;

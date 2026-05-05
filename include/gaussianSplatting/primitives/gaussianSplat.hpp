@@ -31,7 +31,7 @@ struct alignas(16) SphericalHarmonics {
 
 	~SphericalHarmonics() = default;
 	
-	glm::vec3 evaluate(glm::vec3 direction) const;  // TODO - find the coefficient constants necessary for evaluation
+	glm::vec3 evaluate(glm::vec3 viewDirection) const;  // TODO - find the coefficient constants necessary for evaluation
 	glm::vec3 color() const;
 
 	// vec4 because of the GPU padding (stored as {chan_i_coeff_0, chan_i_coeff_1, chan_i_coeff_2, pad})
@@ -58,11 +58,9 @@ struct alignas(16) GaussianSplat {
 
 	glm::vec3 position = glm::vec3(0.0f);  // world coordinates
 	GLfloat opacity = 1.0f;  // blending coefficient (alpha)
-
 	glm::quat covarianceRotation = glm::fquat(1.0f, 0.0f, 0.0f, 0.0f);  // axes orientation
 	glm::vec3 covarianceScale = glm::vec3(1.0f);  // standard deviation along axes
 	GLfloat _pad0 = 0.0f;
-
 	SphericalHarmonics sphericalHarmonics;
 };
 static_assert(sizeof(GaussianSplat) == sizeof(SphericalHarmonics) + 48);

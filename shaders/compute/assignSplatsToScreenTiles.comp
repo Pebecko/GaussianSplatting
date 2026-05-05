@@ -1,16 +1,152 @@
-struct SphericalHarmonics {
-	float coefficients[];
-};
+#version 460
 
+
+#define RENDERING_SETTINGS_BUFFER_BINDING	0	// UBO
+
+#define GAUSSIAN_SPLATS_BUFFER_BINDING		0	// SSBO
+
+
+#define WORK_GROUP_SIZE_X 256
+#define WORK_GROUP_SIZE_Y 1
+#define WORK_GROUP_SIZE_Z 1
+
+
+#define SPHERICAL_HARMONICS_DEGREE 2
+#define SPHERICAL_HARMONICS_COEFFICIENTS_PER_CHANNEL ((SPHERICAL_HARMONICS_DEGREE + 1) * (SPHERICAL_HARMONICS_DEGREE + 1))  // coefficients per channel: (deg + 1)^2
+// #define SPHERICAL_HARMONICS_TOTAL_COEFFICIENTS 3 * SPHERICAL_HARMONICS_COEFFICIENTS_PER_CHANNEL  // total coefficients: 3 * (deg + 1)^2
+
+
+struct SphericalHarmonics {
+	vec4 coefficients[SPHERICAL_HARMONICS_COEFFICIENTS_PER_CHANNEL];
+};
 
 struct GaussianSplat {
 	vec3 position;  // world coordinates
 	float opacity;  // blending coefficient (alpha)
-	mat3x3 covarianceMatrix;  // anisotropic covariance
+	vec4 covarianceRotation;  // quat: {x, y, z, w}
+	vec3 covarianceScale;
+	float _pad0;
 	SphericalHarmonics sphericalHarmonics;
 };
 
 
-layout(binding = ..., std430) buffer  GaussianSplats {
+
+layout(local_size_x = WORK_GROUP_SIZE_X, local_size_y = WORK_GROUP_SIZE_Y, local_size_z = WORK_GROUP_SIZE_Z) in;
+
+
+layout(binding = GAUSSIAN_SPLATS_BUFFER_BINDING, std430) buffer GaussianSplats {
 	GaussianSplat gaussianSplats[];
+};
+
+
+mat3x3 quatToMat3x3(vec4 quat) {
+	float quat_xx = quat.x * quat.x;
+	float quat_yy = quat.y * quat.y;
+	float quat_zz = quat.z * quat.z;
+	float quat_xz = quat.x * quat.z;
+	float quat_xy = quat.x * quat.y;
+	float quat_yz = quat.y * quat.z;
+	float quat_wx = quat.w * quat.x;
+	float quat_wy = quat.w * quat.y;
+	float quat_wz = quat.w * quat.z;
+
+	// this might need to be transposed
+	return mat3x3(
+		1.0f - 2.0f * (quat_yy + quat_zz),
+		2.0f * (quat_xy + quat_wz),
+		2.0f * (quat_xz - quat_wy),
+
+		2.0f * (quat_xy - quat_wz),
+		1.0f - 2.0f * (quat_xx + quat_zz),
+		2.0f * (quat_yz + quat_wx),
+		
+		2.0f * (quat_xz + quat_wy),
+		2.0f * (quat_yz - quat_wx),
+		1.0f - 2.0f * (quat_xx +  quat_yy)
+	);
+}
+
+mat3x3 gaussianSplatCovarianceMatrix3d(vec4 covarianceRotation, vec3 covarianceScale) {
+	mat3x3 rotationMatrix = quatToMat3x3(covarianceRotation);
+
+	vec3 scaleSquared = covarianceScale * covarianceScale;
+
+	mat3x3 scaleMatrix = mat3x3(
+		scaleSquared.x, 0.0f, 0.0f,
+		0.0f, scaleSquared.y, 0.0f,
+		0.0f, 0.0f, scaleSquared.z
+	);
+
+	return rotationMatrix * scaleMatrix * transpose(rotationMatrix);
+}
+
+// trace of a matrix is equal to the sum of eigenvalues -> overestimates the largest eigenvalue
+// tr(C) = C[0][0] + C[1][1] = lambda_1 + lambda_2
+float approximateMaxEigenvalueWithTrace(mat2x2 projectedGaussian2d) {
+	return projectedGaussian2d[0][0] + projectedGaussian2d[1][1];
+}
+
+float approximateMaxEigenvalueWithDiagonalMax(mat2x2 projectedGaussian2d) {
+	return max(projectedGaussian2d[0][0], projectedGaussian2d[1][1]);
+}
+
+float findMaxEigenvalue(mat2x2 projectedGaussian2d) {
+	float halfNegativeBeta = 0.5f * (projectedGaussian2d[0][0] + projectedGaussian2d[1][1]);  // (a + d) / 2
+	float negativeGamma = (projectedGaussian2d[1][0] * projectedGaussian2d[0][1]) - (projectedGaussian2d[0][0] * projectedGaussian2d[1][1]);  // (b * c) - (a * d)
+
+	return halfNegativeBeta + sqrt((halfNegativeBeta * halfNegativeBeta) + negativeGamma);
+}
+
+
+// built in variables (https://wikis.khronos.org/opengl/Compute_Shader)
+// in uvec3 gl_NumWorkGroups
+// in uvec3 gl_WorkGroupSize
+// 
+// in uvec3 gl_WorkGroupID
+// in uvec3 gl_GlobalInvocationID
+// in uvec3 gl_LocalInvocationID
+
+// in uint gl_LocalInvocationIndex
+
+void main() {
+	// each shader could take one splat
+	uvec3 workGroupGridSize = gl_WorkGroupSize * gl_NumWorkGroups;
+	uint gaussianSplatIndex = gl_GlobalInvocationID.z * workGroupGridSize.x * workGroupGridSize.y + gl_GlobalInvocationID.y * workGroupGridSize.x + gl_GlobalInvocationID.x;
+
+	// index out of range
+	if (gaussianSplatIndex >= gaussianSplats.length()) {
+		return;
+	}
+
+	// TODO - compute tile size
+	vec2 screenSize = vec2(renderingSettings.screenWidth, renderingSetting.screenHeight);
+	vec2 tileSize = screenSize / vec2(totalTilePerAxis);
+
+	GaussianSplat gaussianSplat = gaussianSplats[gaussianSplatIndex];
+
+	// approximate the largest eingenvalue of projected (2D) covariance matrix
+	//	could use trace perhaps
+	// take square root (variance -> standard deviation)
+	// assign to all tiles in the k * sigma range of the mean (k = 3 -> 99.7% is probably ok)		
+	mat3x3 covarianceMatrix3d_worldCoordinates = gaussianSplatCovarianceMatrix3d(
+		gaussianSplat.covarianceRotation, 
+		gaussianSplat.covarianceScale
+	);
+	mat2x2 projectedCovarianceMatrix2d = projectGaussianCovariance(renderingSettings.viewMatrix, covarianceMatrix3d_worldCoordinates);
+
+	vec2 projectedMean2d = projectGaussianMean(...);
+
+	float maxEigenvalue = findMaxEigenvalue(projectedCovarianceMatrix2d);  // sigma_max^2
+	float boundingBoxRadius = 3.0 * sqrt(maxEigenvalue); 
+
+	// TODO - fix this to be in range <0; screenSize> not in <-1; 1> ???
+	vec2 boundingBoxMinCoordinates = projectedMean2d - vec2(boundingBoxRadius);
+	vec2 boundingBoxMaxCoordinates = projectedMean2d + vec2(boundingBoxRadius);
+	
+	uvec2 minTileIndices = uvec2(clamp(floor(boundingBoxMinCoordinates / tileSize), vec2(0.0f), screenSize);
+	uvec2 maxTileIndices = uvec2(clamp(floor(boundingBoxMaxCoordinates / tileSize), vec2(0.0f), screenSize);
+
+
+	// TODO - loop over tile index ranges and assign
+	//	tileMin <= tileIndex <= tileMax
 }
