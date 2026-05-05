@@ -98,19 +98,28 @@
 
 == Gaussian Optimization
 
-*Optimization iteration*:
+#grid(
+  columns: (1fr, 1fr),
+  gutter: 2em, // Gap between columns
 
-+ *Render* Gaussian splats from input viewpoints.
-+ *Compute loss* between rendered and input images.
-+ Backpropagate the loss to *update parameters* of the Gaussian splats.
- - Use *gradient descent*
-+ Every $N$-th iteration:
- - *Prune* low-opacity splats
- - *Split* large splats
- - *Duplicate* splats in high-error regions
+  [
+    *Optimization iteration*:
 
-#figure(
-  image("assets/density_control.png")
+    + *Render* Gaussian splats from input viewpoints.
+    + *Compute loss* between rendered and input images.
+    + Backpropagate the loss to *update parameters* of the Gaussian splats.
+     - Use *gradient descent*
+    + Every $N$-th iteration:
+      - *Prune* low-opacity splats
+      - *Split* large splats
+      - *Duplicate* splats in high-error regions
+  ],
+  
+  [
+    #align(center + horizon)[
+      #image("assets/density_control.png")
+    ]
+  ]
 )
 
 == Comparison: Gaussian Splatting vs. NeRF
