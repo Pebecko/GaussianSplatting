@@ -15,7 +15,7 @@
 == Novel View Synthesis 
 
 #figure(
-  image("assets/novel_view_synthesis.png", width: 100%)
+  image("assets/novel_view_synthesis_generated.png", width: 100%)
 )
 
 == Other methods
