@@ -20,17 +20,37 @@
 
 == Other methods
 
-- Radiance Fields
+#grid(
+  rows: (1fr, 1fr), // Gap between columns
 
-- Neural Radiance Fields (NeRF)
+  [
+    - *Photogrammetry* - reconstructing 3D mesh.
 
-- Photogrammetry
+    - *Radiance Fields* - representing the scene as a voxel grid.
 
-== NeRF
+    - *Neural Radiance Fields* (NeRF) - radiance fields represented by a neural network
+  ],
+  
+  [
+    #grid(
+  columns: (1fr, 1fr),
+  gutter: 2em, // Gap between columns
 
-#figure(
-  image("assets/radiance_field.png", width: 100%)
+  [
+    #align(center + horizon)[
+      #image("assets/bear_mesh.png", width: 100%)
+    ]
+  ],
+  
+  [
+    #align(center + horizon)[
+      #image("assets/radiance_field.png", width: 100%)
+    ]
+  ]
 )
+  ]
+)
+
 
 == What is a Gaussian Splat?
 
@@ -41,9 +61,9 @@
   [
     *3D primitive defined by*:
     - Position (x, y, z)
+    - Anisotropic covariance matrix
     - Color as spherical harmonics
     - Opacity
-    - Anisotropic covariance matrix
   ],
   
   [
@@ -53,7 +73,7 @@
   ]
 )
 
-== Method overview
+== Method Overview
 
 *Comparable to training of Neural Networks*:
 
@@ -61,7 +81,7 @@
 
 - *Forward pass* - Render the current set of Gaussian splats from the input viewpoints.
 
-- *Backward pass* - Backpropagate the loss to update the parameters of the Gaussian splats.
+- *Backward pass* - Backpropagate the loss (MSE) to update the parameters of the Gaussian splats.
 
 == Point Cloud - Structure from Motion
 
