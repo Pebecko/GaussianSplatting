@@ -38,7 +38,7 @@ Buffers::Buffers() {
 	// SSBOs
 	// array of structs GaussianSplat len MAX_GAUSSIAN_SPLATS
 	this->gaussianSplatsBuffer.allocateFixedSize(MAX_GAUSSIAN_SPLATS * sizeof(GaussianSplat), GL_DYNAMIC_STORAGE_BIT);
-	this->gaussianSplatsBuffer.bindUniformBufferToBinding(GAUSSIAN_SPLATS_BUFFER_BINDING);
+	this->gaussianSplatsBuffer.bindShaderStorageBufferToBinding(GAUSSIAN_SPLATS_BUFFER_BINDING);
 
 	// empty VAO (rendering requires it even though it serves no actual purpose)
 	//this->emptyVAO = gl::VertexArray();
@@ -89,7 +89,8 @@ Textures::Textures(GLint textureWidth, GLint textureHeight) {
 
 void Textures::blitToScreen(GLint screenWidth, GLint screenHeight) {
 	glBlitFramebuffer(
-		0, 0, this->textureWidth, this->textureHeight,  // source dimension
+		//0, 0, this->textureWidth, this->textureHeight,  // source dimension
+		0, 0, screenWidth, screenHeight,  // source dimension
 		0, 0, screenWidth, screenHeight,  // destination dimensions
 		GL_COLOR_BUFFER_BIT,
 		GL_NEAREST

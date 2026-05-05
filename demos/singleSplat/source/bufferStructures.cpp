@@ -4,8 +4,18 @@
 
 
 RenderingSettings::RenderingSettings() {
-    this->viewMatrix = glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    this->projectionMatrix = glm::perspective(glm::radians(90.0f), 16.0f / 9.0f, 0.1f, 128.0f);  // TODO - update the aspect ratio based on the window size
+    //this->viewMatrix = glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    //this->projectionMatrix = glm::perspective(glm::radians(90.0f), 16.0f / 9.0f, 0.1f, 128.0f);  // TODO - update the aspect ratio based on the window size
+	this->viewMatrix = this->computeViewMatrix(glm::mat3x3(1.0f), glm::vec3(0.0f, 0.0f, 1.5f));
+	this->projectionMatrix = this->computeProjectionMatrix(
+		this->cameraFocalLength,
+		this->cameraPixelAspectRatio,
+		this->cameraPrincipalPointInPixels,
+		this->screenWidth,
+		this->screenHeight,
+		this->cameraNearDistance,
+		this->cameraFarDistance
+	);
 }
 
 
@@ -36,13 +46,22 @@ glm::mat4x4 RenderingSettings::computeProjectionMatrix(
 	   
 	// proj[3][2] = -(2.0f * far * near) / (far - near);
 
+	/*T const tanHalfFovy = tan(fovy / static_cast<T>(2));
+
+	mat<4, 4, T, defaultp> Result(static_cast<T>(0));
+	Result[0][0] = static_cast<T>(1) / (aspect * tanHalfFovy);
+	Result[1][1] = static_cast<T>(1) / (tanHalfFovy);
+	Result[2][2] = zFar / (zFar - zNear);
+	Result[2][3] = static_cast<T>(1);
+	Result[3][2] = -(zFar * zNear) / (zFar - zNear);*/
+
 	// TODO - check this
-	return glm::mat4x4(
+	return glm::transpose(glm::mat4x4(
 		2.0f * pixelAspectRatio * focalLengthPixels / imageWidthPixels, 0.0f, 0.0f, 0.0f,
-		0.0f, -2.0f * focalLengthPixels / imageWidthPixels, 0.0f, 0.0f,
+		0.0f, 2.0f * focalLengthPixels / imageHeightPixels, 0.0f, 0.0f,
 		1.0f - 2.0f * principalPointPixels.x / imageWidthPixels, 2.0f * principalPointPixels.y / imageHeightPixels - 1.0f, -(cameraFarDistance + cameraNearDistance) / (cameraFarDistance - cameraNearDistance), -1.0f,
 		0.0f, 0.0f, -(2.0f * cameraFarDistance * cameraNearDistance) / (cameraFarDistance - cameraNearDistance), 0.0f
-	);
+	));
 }
 
 glm::mat4x4 RenderingSettings::computeViewMatrix(

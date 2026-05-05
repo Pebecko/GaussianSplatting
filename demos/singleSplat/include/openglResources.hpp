@@ -51,12 +51,12 @@ struct Textures {
 
 	GLuint framebuffer;
 
-	GLint textureWidth = 800;
-	GLint textureHeight = 450;
+	GLint textureWidth = 2000;
+	GLint textureHeight = 2000;
 
-	Textures(GLint textureWidth = 800, GLint textureHeight = 450);
+	Textures(GLint textureWidth = 2000, GLint textureHeight = 2000);
 
-	void blitToScreen(GLint screenWidth = 800, GLint screenHeight = 450);
+	void blitToScreen(GLint screenWidth = 2000, GLint screenHeight = 2000);
 };
 
 

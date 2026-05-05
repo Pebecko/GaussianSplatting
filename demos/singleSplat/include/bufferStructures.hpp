@@ -15,7 +15,7 @@ struct alignas(16) RenderingSettings {
 
 	GLfloat cameraFocalLength = 1.0f;
 	GLfloat cameraPixelAspectRatio = 1.0f;
-	glm::vec2 cameraPrincipalPointInPixels = glm::vec2(0.0f);
+	glm::vec2 cameraPrincipalPointInPixels = glm::vec2(400.0f, 225.0f);
 
 	GLfloat cameraNearDistance = 0.1f;  // TODO - synchronize these with camera settings somehow when free camera is added (or just pass those to the shaders)
 	GLfloat cameraFarDistance = 128.0f;

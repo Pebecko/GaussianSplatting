@@ -49,10 +49,20 @@ void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	if (width != 0 && height != 0) {
 		state->rendering.renderingSettings.screenWidth = width;
 		state->rendering.renderingSettings.screenHeight = height;
+		state->rendering.renderingSettings.cameraPrincipalPointInPixels = glm::vec2(static_cast<float>(width) / 2.0f, static_cast<float>(height) / 2.0f);
 
-		state->rendering.renderingSettings.projectionMatrix = glm::perspective(
-			glm::radians(state->rendering.cameraFovAngleY),
-			state->rendering.renderingSettings.screenAspectRatio(),
+		//state->rendering.renderingSettings.projectionMatrix = glm::perspective(
+		//	glm::radians(state->rendering.cameraFovAngleY),
+		//	state->rendering.renderingSettings.screenAspectRatio(),
+		//	state->rendering.renderingSettings.cameraNearDistance,
+		//	state->rendering.renderingSettings.cameraFarDistance
+		//);
+		state->rendering.renderingSettings.projectionMatrix = state->rendering.renderingSettings.computeProjectionMatrix(
+			state->rendering.renderingSettings.cameraFocalLength,
+			state->rendering.renderingSettings.cameraPixelAspectRatio,
+			state->rendering.renderingSettings.cameraPrincipalPointInPixels,
+			state->rendering.renderingSettings.screenWidth,
+			state->rendering.renderingSettings.screenHeight,
 			state->rendering.renderingSettings.cameraNearDistance,
 			state->rendering.renderingSettings.cameraFarDistance
 		);

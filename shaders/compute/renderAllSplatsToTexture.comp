@@ -24,7 +24,7 @@
 #define SPHERICAL_HARMONICS_DEGREE_2_CONSTANT_4 0.5462742152960396f
 
 
-#define ACCUMULATED_OPACITY_STOPPING_VALUE 0.995f
+#define ACCUMULATED_OPACITY_STOPPING_VALUE 0.9999f
 
 
 struct SphericalHarmonics {
@@ -97,31 +97,40 @@ vec3 evaluateSphericalHarmonics(SphericalHarmonics sphericalHarmonics, vec3 view
     return color;
 }
 
+// mean transformations
+vec3 transformMeanWorldToCamera(
+	mat4x4 viewMatrix,
+	vec3 gaussianMean_worldCoordinates
+) {
+	vec4 gaussianMean_cameraCoordinates = (viewMatrix * vec4(gaussianMean_worldCoordinates, 1.0f));
 
-vec2 projectGaussianMean(
-	mat4x4 viewMatrix, 
+	// this division should not be necessary as view matrix should be a rigid transformation
+	return gaussianMean_cameraCoordinates.xyz / gaussianMean_cameraCoordinates.w;
+}
+
+vec2 projectMeanCameraToScreen(
 	float cameraFocalLength,
 	float cameraPixelAspectRatio,
-	vec4 gaussianMean_worldCoordinates
+	vec2 cameraPrincipalPointInPixels,
+	vec3 gaussianMean_cameraCoordinates
 ) {
-	vec3 gaussianMean_cameraCoordinates = (viewMatrix * gaussianMean_worldCoordinates).xyz;
-
 	return vec2(
-		(cameraPixelAspectRatio * cameraFocalLength) * gaussianMean_cameraCoordinates.x / gaussianMean_cameraCoordinates.z,
-		cameraFocalLength * gaussianMean_cameraCoordinates.y / gaussianMean_cameraCoordinates.z
+		(((cameraPixelAspectRatio * cameraFocalLength) * gaussianMean_cameraCoordinates.x) / gaussianMean_cameraCoordinates.z) + cameraPrincipalPointInPixels.x,
+		((cameraFocalLength * gaussianMean_cameraCoordinates.y / gaussianMean_cameraCoordinates.z) + cameraPrincipalPointInPixels.y)
 	);
 }
 
-mat3x3 quatToMat3x3(vec4 quat) {
-	float quat_xx = quat.x * quat.x;
-	float quat_yy = quat.y * quat.y;
-	float quat_zz = quat.z * quat.z;
-	float quat_xz = quat.x * quat.z;
-	float quat_xy = quat.x * quat.y;
-	float quat_yz = quat.y * quat.z;
-	float quat_wx = quat.w * quat.x;
-	float quat_wy = quat.w * quat.y;
-	float quat_wz = quat.w * quat.z;
+// covariance transformations
+mat3x3 quaternionToMat3x3(vec4 quaternion) {
+	float quat_xx = quaternion.x * quaternion.x;
+	float quat_yy = quaternion.y * quaternion.y;
+	float quat_zz = quaternion.z * quaternion.z;
+	float quat_xz = quaternion.x * quaternion.z;
+	float quat_xy = quaternion.x * quaternion.y;
+	float quat_yz = quaternion.y * quaternion.z;
+	float quat_wx = quaternion.w * quaternion.x;
+	float quat_wy = quaternion.w * quaternion.y;
+	float quat_wz = quaternion.w * quaternion.z;
 
 	// this might need to be transposed
 	return mat3x3(
@@ -140,7 +149,7 @@ mat3x3 quatToMat3x3(vec4 quat) {
 }
 
 mat3x3 gaussianSplatCovarianceMatrix3d(vec4 covarianceRotation, vec3 covarianceScale) {
-	mat3x3 rotationMatrix = quatToMat3x3(covarianceRotation);
+	mat3x3 rotationMatrix = quaternionToMat3x3(covarianceRotation);
 
 	vec3 scaleSquared = covarianceScale * covarianceScale;
 
@@ -153,19 +162,16 @@ mat3x3 gaussianSplatCovarianceMatrix3d(vec4 covarianceRotation, vec3 covarianceS
 	return rotationMatrix * scaleMatrix * transpose(rotationMatrix);
 }
 
-mat2x2 projectGaussianCovariance(
-	mat4x4 viewMatrix, 
-	float focalLength,
-	float pixelAspectRatio,
-	//GLfloat skewAngleRadians,
-	mat3x3 covarianceMatrix_worldCoordinates,
-	vec3 covarianceMean_worldCoordinates
+mat3x3 transformCovarianceWorldToCamera(
+	mat4x4 viewMatrix,
+	mat3x3 covarianceMatrix_worldCoordinates
 ) {
 	// TODO - chech that this picks the top left 3x3 submatrix
 	mat3x3 viewMatrixLinearTransform = mat3x3(
-		vec4(viewMatrix.x).xyz,
-		vec4(viewMatrix.y).xyz,
-		vec4(viewMatrix.z).xyz
+		viewMatrix
+//		viewMatrix[0].xyz,
+//		viewMatrix[1].xyz,
+//		viewMatrix[2].xyz
 //		viewMatrix[0][0], viewMatrix[0][1], viewMatrix[0][2],
 //		viewMatrix[1][0], viewMatrix[1][1], viewMatrix[1][2],
 //		viewMatrix[2][0], viewMatrix[2][1], viewMatrix[2][2]
@@ -173,21 +179,27 @@ mat2x2 projectGaussianCovariance(
 
 	mat3x3 covarianceMatrix_cameraCoordinates = viewMatrixLinearTransform * covarianceMatrix_worldCoordinates * transpose(viewMatrixLinearTransform);
 
-	// TODO
-	mat3x2 projectionJacobianMatrix = mat3x2(
-		pixelAspectRatio * focalLength / covarianceMean_worldCoordinates.z, 0.0f, (-pixelAspectRatio * focalLength * covarianceMean_worldCoordinates.x) / (covarianceMean_worldCoordinates.z * covarianceMean_worldCoordinates.z),
-		0.0f, focalLength / covarianceMean_worldCoordinates.z, (-focalLength * covarianceMean_worldCoordinates.y) / (covarianceMean_worldCoordinates.z * covarianceMean_worldCoordinates.z)
-	);  // 2 rows, 3 columns
+	return covarianceMatrix_cameraCoordinates;
+}
+
+mat2x2 projectCovarianceCameraToScreen(
+	float focalLength,
+	float pixelAspectRatio,
+	mat3x3 covarianceMatrix_cameraCoordinates,
+	vec3 covarianceMean_cameraCoordinates
+) {
+	mat3x2 projectionJacobianMatrix = mat3x2(  // 2 rows, 3 columns
+		pixelAspectRatio * focalLength / covarianceMean_cameraCoordinates.z, 0.0f, (-pixelAspectRatio * focalLength * covarianceMean_cameraCoordinates.x) / (covarianceMean_cameraCoordinates.z * covarianceMean_cameraCoordinates.z), 
+		0.0f, focalLength / covarianceMean_cameraCoordinates.z, (-focalLength * covarianceMean_cameraCoordinates.y) / (covarianceMean_cameraCoordinates.z * covarianceMean_cameraCoordinates.z)
+	);
 
 	return projectionJacobianMatrix * covarianceMatrix_cameraCoordinates * transpose(projectionJacobianMatrix);
 }
 
-
-// TODO - correct this
-float findGaussianWeight(mat2 inverseCovarianceMatrix2d, vec2 pixelScreenCoordinate, vec2 covarianceMeanScreenCoordinate) {
-	vec2 meanToPixel = pixelScreenCoordinate - covarianceMeanScreenCoordinate;
+float findGaussianWeight(mat2x2 covarianceMatrix_screenCoordinates, vec2 covarianceMean_ScreenCoordinates, vec2 currentPixel_screenCoordinates) {
+	vec2 meanToPixel = currentPixel_screenCoordinates - covarianceMean_ScreenCoordinates;
 		
-    return exp(-0.5 * dot(meanToPixel, inverseCovarianceMatrix2d * meanToPixel));		
+    return exp(-0.5 * dot(meanToPixel, inverse(covarianceMatrix_screenCoordinates) * meanToPixel));		
 }
 
 
@@ -203,49 +215,65 @@ float findGaussianWeight(mat2 inverseCovarianceMatrix2d, vec2 pixelScreenCoordin
 
 
 void main() {
-	uvec2 pixelCoordinates = gl_GlobalInvocationID.xy;
-//	vec2 normalizedPixelCoordinates = pixelCoordinates / vec2(renderingSettings.screenWidth, renderingSettings.screenHeight);
-	vec2 normalizedPixelCoordinates = pixelCoordinates / vec2(200, 200);
+	ivec2 pixelCoordinates = ivec2(gl_GlobalInvocationID.xy);
+//	vec2 normalizedPixelCoordinates = vec2(
+//		float(pixelCoordinates.x) / float(renderingSettings.screenWidth),
+//		float(pixelCoordinates.y) / float(renderingSettings.screenHeight)
+//	);
 
 	// coordinates out of screen
-//	if (pixelCoordinates.x >= renderingSettings.screenWidth || pixelCoordinates.y >= renderingSettings.screenHeight) {
-	if (pixelCoordinates.x >= 200 || pixelCoordinates.y >= 200) {
+	if (pixelCoordinates.x >= renderingSettings.screenWidth || pixelCoordinates.y >= renderingSettings.screenHeight) {
 		return;
 	}
-
-	// TODO - check this
-	vec3 viewDirection = (inverse(renderingSettings.viewMatrix) * vec4(0.0f, 0.0f, -1.0f, 1.0f)).xyz;
 
 	vec3 accumulatedColor = vec3(0.0f);
 	float accumulatedOpacity = 0.0f;
 
+	// loop through all splats front-to-back and blend their colors
 	for (uint gaussianSplatIndex = 0u; gaussianSplatIndex < gaussianSplats.length(); ++gaussianSplatIndex) {
 		GaussianSplat gaussianSplat = gaussianSplats[gaussianSplatIndex];
-		
-		mat3x3 covarianceMatrix3d_worldCoordinates = gaussianSplatCovarianceMatrix3d(
-			gaussianSplat.covarianceRotation, 
-			gaussianSplat.covarianceScale
-		);
-		mat2x2 projectedCovarianceMatrix2d = projectGaussianCovariance(
-			renderingSettings.viewMatrix, 
-			renderingSettings.cameraFocalLength, 
-			renderingSettings.cameraPixelAspectRatio, 
-			covarianceMatrix3d_worldCoordinates,
+
+		vec3 gaussianMean_cameraCoordinates = transformMeanWorldToCamera(
+			renderingSettings.viewMatrix,
 			gaussianSplat.position
 		);
 
-		vec2 projectedMean2d = projectGaussianMean(
-			renderingSettings.viewMatrix,
+		// splat is behind the camera or too far in front of it
+		if (gaussianMean_cameraCoordinates.z < renderingSettings.cameraNearDistance || gaussianMean_cameraCoordinates.z > renderingSettings.cameraFarDistance) {
+			continue;
+		}
+
+		vec2 gaussianMean_screenCoordinates = projectMeanCameraToScreen(
 			renderingSettings.cameraFocalLength,
 			renderingSettings.cameraPixelAspectRatio,
-			vec4(gaussianSplat.position, 1.0f)
+			renderingSettings.cameraPrincipalPointInPixels,
+			gaussianMean_cameraCoordinates
+		);
+		
+		mat3x3 gaussianCovariance_worldCoordinates = gaussianSplatCovarianceMatrix3d(
+			gaussianSplat.covarianceRotation, 
+			gaussianSplat.covarianceScale
 		);
 
-		vec3 projectedGaussianColor = evaluateSphericalHarmonics(gaussianSplat.sphericalHarmonics, viewDirection);
+		mat3x3 gaussianCovariance_cameraCoordinates = transformCovarianceWorldToCamera(
+			renderingSettings.viewMatrix,
+			gaussianCovariance_worldCoordinates
+		);
+
+		mat2x2 gaussianCovariance_screenCoordinates = projectCovarianceCameraToScreen(
+			renderingSettings.cameraFocalLength, 
+			renderingSettings.cameraPixelAspectRatio, 
+			gaussianCovariance_cameraCoordinates,
+			gaussianMean_cameraCoordinates
+		);
+
+		vec3 gaussianViewDirection = -gaussianMean_cameraCoordinates;
+
+		vec3 projectedGaussianColor = clamp(evaluateSphericalHarmonics(gaussianSplat.sphericalHarmonics, gaussianViewDirection), vec3(0.0f), vec3(1.0f));
 		float projectedGaussianOpacity = gaussianSplat.opacity * findGaussianWeight(
-			inverse(projectedCovarianceMatrix2d),
-			normalizedPixelCoordinates,
-			projectedMean2d
+			gaussianCovariance_screenCoordinates,
+			gaussianMean_screenCoordinates,
+			vec2(pixelCoordinates)
 		);
 
 		float mixingWeight = (1.0f - accumulatedOpacity) * projectedGaussianOpacity;
@@ -256,14 +284,17 @@ void main() {
 		accumulatedColor += mixingWeight * projectedGaussianColor;
 		accumulatedOpacity += mixingWeight;
 
+		// TODO - allow setting this value from GUI
 		if (accumulatedOpacity > ACCUMULATED_OPACITY_STOPPING_VALUE) {
 			break;
 		}
+
+//		imageStore(outputTexture, ivec2(pixelCoordinates), vec4(float(pixelCoordinates.x), float(pixelCoordinates.x) - gaussianMean_screenCoordinates.y, determinant(gaussianCovariance_screenCoordinates), 1.0f));
+//		imageStore(outputTexture, ivec2(pixelCoordinates), vec4((float(pixelCoordinates.x) - gaussianMean_screenCoordinates.x) / renderingSettings.screenWidth, float(pixelCoordinates.y) - gaussianMean_screenCoordinates.y, determinant(gaussianCovariance_screenCoordinates), 1.0f));
+//		imageStore(outputTexture, pixelCoordinates, vec4(accumulatedColor, accumulatedOpacity));
 	}
 	
 	// TODO - for tile debugging render splats with color based on tile index
 
-	// write accumulated color into texture
-//	imageStore(outputTexture, ivec2(pixelCoordinates), vec4(accumulatedColor, accumulatedOpacity));
-	imageStore(outputTexture, ivec2(pixelCoordinates), vec4(vec3(normalizedPixelCoordinates, 1.0f), 1.0f));
+	imageStore(outputTexture, ivec2(pixelCoordinates), vec4(accumulatedColor, accumulatedOpacity));
 }

@@ -58,10 +58,10 @@ void DemoState::translateCamera(bool forward, bool left, bool back, bool right, 
 	}
 
 	if (up) {  // up (+y)
-		translationVector -= upDirection;
+		translationVector += upDirection;
 	}
 	if (down) {  // down (-y)
-		translationVector += upDirection;
+		translationVector -= upDirection;
 	}
 
 	if (glm::dot(translationVector, translationVector) < 0.5f) {  // no change in position
@@ -72,7 +72,7 @@ void DemoState::translateCamera(bool forward, bool left, bool back, bool right, 
 	translationVector = glm::normalize(translationVector) * this->rendering.cameraMoveSpeed * timeDelta;
 
 	// updating the position
-	this->rendering.renderingSettings.viewMatrix = glm::inverse(glm::translate(glm::mat4(1.0f ), translationVector) * eyeMatrix);
+	this->rendering.renderingSettings.viewMatrix = glm::inverse(glm::translate(glm::mat4(1.0f), translationVector) * eyeMatrix);
 
 	this->updateFlags.renderingSettingsChanged = true;
 }
@@ -98,7 +98,7 @@ void DemoState::rotateCamera(double mouseDeltaX, double mouseDeltaY) {
 	glm::mat4 xAxisRotation = glm::rotate(glm::mat4(1.0f), -angleDeltaX, glm::vec3(1.0f, 0.0f, 0.0f));
 
 	// left/right rotation
-	glm::mat4 zAxisRotation = glm::rotate(glm::mat4(1.0f), angleDeltaZ, glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat4 zAxisRotation = glm::rotate(glm::mat4(1.0f), -angleDeltaZ, glm::vec3(0.0f, 0.0f, 1.0f));
 
 	this->rendering.renderingSettings.viewMatrix = glm::inverse(translateFromOrigin * zAxisRotation * translateToOrigin * eyeMatrix * xAxisRotation);
 
