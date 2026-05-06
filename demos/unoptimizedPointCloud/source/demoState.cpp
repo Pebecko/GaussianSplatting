@@ -3,15 +3,34 @@
 
 DemoState::DemoState() {
 	this->rendering.gaussianSplats.reserve(MAX_GAUSSIAN_SPLATS);
-	this->appendGaussianSplat(
-		GaussianSplat(
-			glm::vec3(0.0f),
-			0.8f,
-			glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-			glm::vec3(1.0f),
-			SphericalHarmonics(glm::vec3(0.5f))
-		)
-	);
+	//this->appendGaussianSplat(
+	//	GaussianSplat(
+	//		glm::vec3(0.0f),
+	//		0.8f,
+	//		glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+	//		glm::vec3(1.0f),
+	//		SphericalHarmonics(glm::vec3(0.5f))
+	//	)
+	//);
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
+	this->appendGaussianSplat(GaussianSplat());
 }
 
 void DemoState::translateCamera(bool forward, bool left, bool back, bool right, bool up, bool down, float timeDelta) {

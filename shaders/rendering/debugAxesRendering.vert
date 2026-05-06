@@ -10,14 +10,19 @@ layout (std140, binding = RENDERING_SETTINGS_BUFFER_BINDING) uniform RenderingSe
     mat4x4 projectionMatrix;
     mat4x4 viewMatrix;
 
+	float cameraFocalLength;
+	float cameraPixelAspectRatio;
+	vec2 cameraPrincipalPointInPixels;
+
 	float cameraNearDistance;
 	float cameraFarDistance;
 
 	int screenWidth;
 	int screenHeight;
+	
+	uint totalGaussians;
 
 	float basePointRadius;
-	float baseLightRadius;
 
 	float _pad0[2];
 } renderingSettings;

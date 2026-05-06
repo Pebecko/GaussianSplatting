@@ -64,10 +64,12 @@ layout (std140, binding = RENDERING_SETTINGS_BUFFER_BINDING) uniform RenderingSe
 
 	int screenWidth;
 	int screenHeight;
+	
+	uint totalGaussians;
 
 	float basePointRadius;
 
-	float _pad0[3];
+	float _pad0[2];
 } renderingSettings;
 
 
@@ -231,7 +233,7 @@ void main() {
 	float accumulatedOpacity = 0.0f;
 
 	// loop through all splats front-to-back and blend their colors
-	for (uint gaussianSplatIndex = 0u; gaussianSplatIndex < gaussianSplats.length(); ++gaussianSplatIndex) {
+	for (uint gaussianSplatIndex = 0u; gaussianSplatIndex < renderingSettings.totalGaussians; ++gaussianSplatIndex) {
 		GaussianSplat gaussianSplat = gaussianSplats[gaussianSplatIndex];
 
 		vec3 gaussianMean_cameraCoordinates = transformMeanWorldToCamera(
@@ -240,6 +242,7 @@ void main() {
 		);
 
 		// splat is behind the camera or too far in front of it
+		// TODO - perform better clipping
 		if (gaussianMean_cameraCoordinates.z > renderingSettings.cameraNearDistance) {  //  || gaussianMean_cameraCoordinates.z < renderingSettings.cameraFarDistance
 			continue;
 		}

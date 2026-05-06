@@ -59,9 +59,10 @@ glm::vec3 SphericalHarmonics::color() const {
 GaussianSplat::GaussianSplat() {
     static std::mt19937 rng{std::random_device{}()};
 
-    // this->position = randVec3(rng, glm::vec3(-1.0f), glm::vec3(1.0f));
+     this->position = randVec3(rng, glm::vec3(-10.0f), glm::vec3(10.0f));
     this->opacity = randScalar(rng, 0.0f, 1.0f);
-    this->covarianceRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);  // TODO - randomize (maybe random angle + axis -> convert)
+    glm::vec3 eulerAngles = randVec3(rng, glm::vec3(-3.141596f), glm::vec3(3.141596f));
+    this->covarianceRotation = glm::quat(eulerAngles);  // TODO - randomize (maybe random angle + axis -> convert)
     this->covarianceScale = randVec3(rng, glm::vec3(0.1f), glm::vec3(1.0f));
     this->sphericalHarmonics = SphericalHarmonics(randVec3(rng, glm::vec3(0.0f), glm::vec3(1.0f)));
 }
