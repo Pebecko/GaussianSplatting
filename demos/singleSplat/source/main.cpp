@@ -285,7 +285,7 @@ void specifyGuiFrame(DemoState& state) {
 		// 	state.updateFlags.gaussianSplatsChanged = true;
 		// }
 
-		if (ImGui::SliderFloat3("Covariance Scale - Standard Deviations", glm::value_ptr(state.rendering.gaussianSplats[0].covarianceScale), 0.001f, 4.0f)) {
+		if (ImGui::SliderFloat3("Covariance Scale - Standard Deviations", glm::value_ptr(state.rendering.gaussianSplats[0].covarianceScale), 0.001f, 10.0f)) {
 			state.updateFlags.gaussianSplatsChanged = true;
 		}
 

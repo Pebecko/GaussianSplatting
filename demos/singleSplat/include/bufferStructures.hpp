@@ -13,19 +13,21 @@ struct alignas(16) RenderingSettings {
 	glm::mat4x4 projectionMatrix = glm::mat4x4(1.0f);
 	glm::mat4x4 viewMatrix = glm::mat4x4(1.0f);
 
-	GLfloat cameraFocalLength = 1.0f;
+	GLfloat cameraFocalLength = 520;
 	GLfloat cameraPixelAspectRatio = 1.0f;
-	glm::vec2 cameraPrincipalPointInPixels = glm::vec2(400.0f, 225.0f);
+	glm::vec2 cameraPrincipalPointInPixels = glm::vec2(500.0f, 300.0f);
 
 	GLfloat cameraNearDistance = 0.1f;  // TODO - synchronize these with camera settings somehow when free camera is added (or just pass those to the shaders)
 	GLfloat cameraFarDistance = 128.0f;
 
-	GLint screenWidth = 800;
-	GLint screenHeight = 450;
+	GLint screenWidth = 1000;
+	GLint screenHeight = 600;
+
+	GLuint totalGaussians = 0u;
 
 	GLfloat basePointRadius = 128.0f;
 
-	GLfloat _pad0[3] = {0.0f};
+	GLfloat _pad0[2] = {0.0f};
 
 	RenderingSettings();
 

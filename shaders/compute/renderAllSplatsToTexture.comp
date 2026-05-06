@@ -115,8 +115,8 @@ vec2 projectMeanCameraToScreen(
 	vec3 gaussianMean_cameraCoordinates
 ) {
 	return vec2(
-		(((cameraPixelAspectRatio * cameraFocalLength) * gaussianMean_cameraCoordinates.x) / gaussianMean_cameraCoordinates.z) + cameraPrincipalPointInPixels.x,
-		((cameraFocalLength * gaussianMean_cameraCoordinates.y / gaussianMean_cameraCoordinates.z) + cameraPrincipalPointInPixels.y)
+		(((cameraPixelAspectRatio * cameraFocalLength) * gaussianMean_cameraCoordinates.x) / -gaussianMean_cameraCoordinates.z) + cameraPrincipalPointInPixels.x,
+		((cameraFocalLength * gaussianMean_cameraCoordinates.y / -gaussianMean_cameraCoordinates.z) + cameraPrincipalPointInPixels.y)
 	);
 }
 
@@ -168,13 +168,13 @@ mat3x3 transformCovarianceWorldToCamera(
 ) {
 	// TODO - chech that this picks the top left 3x3 submatrix
 	mat3x3 viewMatrixLinearTransform = mat3x3(
-		viewMatrix
+//		viewMatrix
 //		viewMatrix[0].xyz,
 //		viewMatrix[1].xyz,
 //		viewMatrix[2].xyz
-//		viewMatrix[0][0], viewMatrix[0][1], viewMatrix[0][2],
-//		viewMatrix[1][0], viewMatrix[1][1], viewMatrix[1][2],
-//		viewMatrix[2][0], viewMatrix[2][1], viewMatrix[2][2]
+		viewMatrix[0][0], viewMatrix[0][1], viewMatrix[0][2],
+		viewMatrix[1][0], viewMatrix[1][1], viewMatrix[1][2],
+		viewMatrix[2][0], viewMatrix[2][1], viewMatrix[2][2]
 	);
 
 	mat3x3 covarianceMatrix_cameraCoordinates = viewMatrixLinearTransform * covarianceMatrix_worldCoordinates * transpose(viewMatrixLinearTransform);
@@ -189,8 +189,9 @@ mat2x2 projectCovarianceCameraToScreen(
 	vec3 covarianceMean_cameraCoordinates
 ) {
 	mat3x2 projectionJacobianMatrix = mat3x2(  // 2 rows, 3 columns
-		pixelAspectRatio * focalLength / covarianceMean_cameraCoordinates.z, 0.0f, (-pixelAspectRatio * focalLength * covarianceMean_cameraCoordinates.x) / (covarianceMean_cameraCoordinates.z * covarianceMean_cameraCoordinates.z), 
-		0.0f, focalLength / covarianceMean_cameraCoordinates.z, (-focalLength * covarianceMean_cameraCoordinates.y) / (covarianceMean_cameraCoordinates.z * covarianceMean_cameraCoordinates.z)
+		pixelAspectRatio * focalLength / covarianceMean_cameraCoordinates.z, 0.0f, 
+		0.0f, focalLength / covarianceMean_cameraCoordinates.z, 
+		(-pixelAspectRatio * focalLength * covarianceMean_cameraCoordinates.x) / (covarianceMean_cameraCoordinates.z * covarianceMean_cameraCoordinates.z), (-focalLength * covarianceMean_cameraCoordinates.y) / (covarianceMean_cameraCoordinates.z * covarianceMean_cameraCoordinates.z)
 	);
 
 	return projectionJacobianMatrix * covarianceMatrix_cameraCoordinates * transpose(projectionJacobianMatrix);
@@ -239,7 +240,7 @@ void main() {
 		);
 
 		// splat is behind the camera or too far in front of it
-		if (gaussianMean_cameraCoordinates.z < renderingSettings.cameraNearDistance || gaussianMean_cameraCoordinates.z > renderingSettings.cameraFarDistance) {
+		if (gaussianMean_cameraCoordinates.z > renderingSettings.cameraNearDistance) {  //  || gaussianMean_cameraCoordinates.z < renderingSettings.cameraFarDistance
 			continue;
 		}
 
@@ -288,13 +289,12 @@ void main() {
 		if (accumulatedOpacity > ACCUMULATED_OPACITY_STOPPING_VALUE) {
 			break;
 		}
-
+		
 //		imageStore(outputTexture, ivec2(pixelCoordinates), vec4(float(pixelCoordinates.x), float(pixelCoordinates.x) - gaussianMean_screenCoordinates.y, determinant(gaussianCovariance_screenCoordinates), 1.0f));
-//		imageStore(outputTexture, ivec2(pixelCoordinates), vec4((float(pixelCoordinates.x) - gaussianMean_screenCoordinates.x) / renderingSettings.screenWidth, float(pixelCoordinates.y) - gaussianMean_screenCoordinates.y, determinant(gaussianCovariance_screenCoordinates), 1.0f));
-//		imageStore(outputTexture, pixelCoordinates, vec4(accumulatedColor, accumulatedOpacity));
+//		imageStore(outputTexture, ivec2(pixelCoordinates), vec4((float(pixelCoordinates.x) - gaussianMean_screenCoordinates.x) / renderingSettings.screenWidth, (float(pixelCoordinates.y) - gaussianMean_screenCoordinates.y) / renderingSettings.screenHeight, 0.0f, 1.0f));
 	}
 	
 	// TODO - for tile debugging render splats with color based on tile index
-
+	
 	imageStore(outputTexture, ivec2(pixelCoordinates), vec4(accumulatedColor, accumulatedOpacity));
 }

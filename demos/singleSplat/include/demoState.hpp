@@ -60,7 +60,7 @@ struct RenderingState {
 	GLfloat cameraFovAngleY = 90.0f;
 
 	GLfloat cameraMoveSpeed = 5.0f;
-	GLfloat cameraMouseSensitivity = 0.04f;
+	GLfloat cameraMouseSensitivity = 0.01f;
 
 	//double currentMouseX = 0.0;
 	//double currentMouseY = 0.0;
