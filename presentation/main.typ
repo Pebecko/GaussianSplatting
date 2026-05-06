@@ -6,7 +6,7 @@
 #show: my-taltech-theme.with(
   title: [Gaussian Splatting],
   subtitle: [Overview of the method and implementation],
-  author: [Matous Krobot, Ditmar Hadera],
+  author: [Matouš Krobot, Ditmar Hadera],
 )
 
 // Generate the title slide
@@ -81,7 +81,7 @@
 
 - *Forward pass* - Render the current set of Gaussian splats from the input viewpoints.
 
-- *Backward pass* - Backpropagate the loss (MSE) to update the parameters of the Gaussian splats.
+- *Backward pass* - Backpropagate the loss to update the parameters of the Gaussian splats.
 
 == Point Cloud - Structure from Motion
 
@@ -126,7 +126,7 @@
     *Optimization iteration*:
 
     + *Render* Gaussian splats from input viewpoints.
-    + *Compute loss* between rendered and input images.
+    + *Compute loss* (MAE) between rendered and input images.
     + Backpropagate the loss to *update parameters* of the Gaussian splats.
      - Use *gradient descent*
     + Every $N$-th iteration:
