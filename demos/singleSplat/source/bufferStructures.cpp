@@ -78,7 +78,7 @@ glm::mat4x4 RenderingSettings::computeProjectionMatrix(
 	projectionMatrix[1][1] = 2.0f * fy / h;
 
 	// principal point
-	projectionMatrix[2][0] = 2.0f * principalPointPixels.x / w - 1.0f;
+	projectionMatrix[2][0] = 1.0f - 2.0f * principalPointPixels.x / w;
 	projectionMatrix[2][1] = 1.0f - 2.0f * principalPointPixels.y / h;
 
 	// depth

@@ -290,7 +290,7 @@ void specifyGuiFrame(DemoState& state) {
 		}
 
 		if (ImGui::CollapsingHeader("Spherical Harmonics Coefficients", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::SliderFloat3("Order 0 - Coefficient 0", glm::value_ptr(state.rendering.gaussianSplats[0].sphericalHarmonics.coefficients[0]), 0.0f, 1.0f)) {
+			if (ImGui::SliderFloat3("Order 0 - Coefficient 0", glm::value_ptr(state.rendering.gaussianSplats[0].sphericalHarmonics.coefficients[0]), 0.0f, 2.0f)) {
 				state.updateFlags.gaussianSplatsChanged = true;
 			}
 			if (ImGui::SliderFloat3("Order 1 - Coefficient 0", glm::value_ptr(state.rendering.gaussianSplats[0].sphericalHarmonics.coefficients[1]), 0.0f, 1.0f)) {
@@ -357,19 +357,56 @@ void specifyGuiFrame(DemoState& state) {
 	int renderingMode = int(state.rendering.renderingMode);
 
 	if (ImGui::CollapsingHeader("Rendering Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-		// dropdown for selecting rendering mode
-		if (ImGui::Combo("Rendering Mode", &renderingMode, renderingModeNames, IM_ARRAYSIZE(renderingModeNames))) {
-			state.rendering.renderingMode = RenderingMode(renderingMode);
+		if (ImGui::SliderFloat("Camera Focal Length", &state.rendering.renderingSettings.cameraFocalLength, 16.0f, 4086.0f)) {
+			state.rendering.renderingSettings.projectionMatrix = state.rendering.renderingSettings.computeProjectionMatrix(
+				state.rendering.renderingSettings.cameraFocalLength,
+				state.rendering.renderingSettings.cameraPixelAspectRatio,
+				state.rendering.renderingSettings.cameraPrincipalPointInPixels,
+				state.rendering.renderingSettings.screenWidth,
+				state.rendering.renderingSettings.screenHeight,
+				state.rendering.renderingSettings.cameraNearDistance,
+				state.rendering.renderingSettings.cameraFarDistance
+			);
+			state.updateFlags.renderingSettingsChanged = true;
+		}
+		if (ImGui::SliderFloat("Camera Pixel Aspect Ratio", &state.rendering.renderingSettings.cameraPixelAspectRatio, 0.1f, 10.0f)) {
+			state.rendering.renderingSettings.projectionMatrix = state.rendering.renderingSettings.computeProjectionMatrix(
+				state.rendering.renderingSettings.cameraFocalLength,
+				state.rendering.renderingSettings.cameraPixelAspectRatio,
+				state.rendering.renderingSettings.cameraPrincipalPointInPixels,
+				state.rendering.renderingSettings.screenWidth,
+				state.rendering.renderingSettings.screenHeight,
+				state.rendering.renderingSettings.cameraNearDistance,
+				state.rendering.renderingSettings.cameraFarDistance
+			);
+			state.updateFlags.renderingSettingsChanged = true;
+		}
+		if (ImGui::SliderFloat2("Camera Principal Point", glm::value_ptr(state.rendering.renderingSettings.cameraPrincipalPointInPixels), 0.0f, float(state.rendering.renderingSettings.screenWidth))) {
+			state.rendering.renderingSettings.projectionMatrix = state.rendering.renderingSettings.computeProjectionMatrix(
+				state.rendering.renderingSettings.cameraFocalLength,
+				state.rendering.renderingSettings.cameraPixelAspectRatio,
+				state.rendering.renderingSettings.cameraPrincipalPointInPixels,
+				state.rendering.renderingSettings.screenWidth,
+				state.rendering.renderingSettings.screenHeight,
+				state.rendering.renderingSettings.cameraNearDistance,
+				state.rendering.renderingSettings.cameraFarDistance
+			);
+			state.updateFlags.renderingSettingsChanged = true;
 		}
 
+		// dropdown for selecting rendering mode
+		//if (ImGui::Combo("Rendering Mode", &renderingMode, renderingModeNames, IM_ARRAYSIZE(renderingModeNames))) {
+		//	state.rendering.renderingMode = RenderingMode(renderingMode);
+		//}
+
 		// checkbox for uniform point size
-		if (ImGui::Checkbox("Uniform Point Size", &state.rendering.uniformPointSize)) {
-			state.updateFlags.renderingSettingsChanged = true;
-		}
+		//if (ImGui::Checkbox("Uniform Point Size", &state.rendering.uniformPointSize)) {
+		//	state.updateFlags.renderingSettingsChanged = true;
+		//}
 		// slider for basePointRadius
-		if (ImGui::SliderFloat("Base Point Radius", &state.rendering.renderingSettings.basePointRadius, 1.0f, 256.0f)) {
-			state.updateFlags.renderingSettingsChanged = true;
-		}
+		//if (ImGui::SliderFloat("Base Point Radius", &state.rendering.renderingSettings.basePointRadius, 1.0f, 256.0f)) {
+		//	state.updateFlags.renderingSettingsChanged = true;
+		//}
 
 		//// camera Y FOV angle
 		//if (ImGui::SliderFloat("Camera FOV Angle Y", &state.rendering.cameraFovAngleY, 30.0f, 100.0f)) {
