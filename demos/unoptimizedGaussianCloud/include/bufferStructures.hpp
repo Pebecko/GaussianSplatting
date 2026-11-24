@@ -23,11 +23,12 @@ struct alignas(16) RenderingSettings {
 	GLint screenWidth = 1000;
 	GLint screenHeight = 600;
 
+	GLuint screenTilesPerRow = 5;
+	GLuint screenTilesPerColumn = 4;
+
 	GLuint totalGaussians = 0u;
 
 	GLfloat basePointRadius = 128.0f;
-
-	GLfloat _pad0[2] = {0.0f};
 
 	RenderingSettings();
 

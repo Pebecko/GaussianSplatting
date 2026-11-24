@@ -1,0 +1,34 @@
+// order gaussian splats front to back for rendering
+
+
+__global__ void intermediateGlobalMemorySwap(int* inputArray, int* outputArray, size_t arrayLength, size_t globalComparisonBlockSize, size_t comparisonBlockSize, bool arrayToAscend) {
+    size_t globalThreadIndex = blockIdx.x * blockDim.x + threadIdx.x;
+
+    size_t comparisonStep = comparisonBlockSize >> 1;
+    size_t comparisonBlockIndex = globalThreadIndex / comparisonStep;
+    size_t inComparisonBlockIndex = globalThreadIndex % comparisonStep;
+
+    size_t globalComparisonBlockIndex = globalThreadIndex / (globalComparisonBlockSize >> 1);  // each block of values only has half as many threads assosiated with it
+    bool globalComparisonBlockToAscend = (globalComparisonBlockIndex % 2) == 0;  // even -> ascending; odd -> descending  (current global comparison block would be sorted in this order if the final array was meant to be in ascending order)
+    bool finalOrderAscending = globalComparisonBlockToAscend == arrayToAscend;  // equivallence (<==>)  (if final array is meant to be in descending order flip globalComparisonBlockToAscend)
+
+    size_t globalFirstValueIndex = comparisonBlockIndex * comparisonBlockSize + inComparisonBlockIndex;
+    size_t globalSecondValueIndex = globalFirstValueIndex + comparisonStep;
+
+    int firstValue, secondValue, temp;
+
+    if (globalThreadIndex < (arrayLength >> 1)) {
+        firstValue = inputArray[globalFirstValueIndex];
+        secondValue = inputArray[globalSecondValueIndex];
+
+        // swap values if their order is wrong
+        if ((finalOrderAscending && (firstValue > secondValue)) || ((!finalOrderAscending) && (firstValue < secondValue))) {
+            temp = firstValue;
+            firstValue = secondValue;
+            secondValue = temp;
+        }
+
+        outputArray[globalFirstValueIndex] = firstValue;
+        outputArray[globalSecondValueIndex] = secondValue;
+    }
+}

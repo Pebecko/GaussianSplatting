@@ -65,11 +65,12 @@ layout (std140, binding = RENDERING_SETTINGS_BUFFER_BINDING) uniform RenderingSe
 	int screenWidth;
 	int screenHeight;
 	
+	uint screenTilesPerRow;
+	uint screenTilesPerColumn;
+
 	uint totalGaussians;
 
 	float basePointRadius;
-
-	float _pad0[2];
 } renderingSettings;
 
 
@@ -123,6 +124,7 @@ vec2 projectMeanCameraToScreen(
 }
 
 // covariance transformations
+// https://www.opengl-tutorial.org/intermediate-tutorials/tutorial-17-quaternions/#how-do-i-create-a-quaternion-in-glsl-
 mat3x3 quaternionToMat3x3(vec4 quaternion) {
 	float quat_xx = quaternion.x * quaternion.x;
 	float quat_yy = quaternion.y * quaternion.y;

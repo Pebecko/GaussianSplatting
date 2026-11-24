@@ -1,0 +1,73 @@
+#version 460
+
+
+#define RENDERING_SETTINGS_BUFFER_BINDING	0	// UBO
+
+#define GAUSSIAN_SPLATS_BUFFER_BINDING		0	// SSBO
+
+
+#define WORK_GROUP_SIZE_X 16
+#define WORK_GROUP_SIZE_Y 16
+#define WORK_GROUP_SIZE_Z 1
+
+
+layout(local_size_x = WORK_GROUP_SIZE_X, local_size_y = WORK_GROUP_SIZE_Y, local_size_z = WORK_GROUP_SIZE_Z) in;
+
+
+layout (std140, binding = RENDERING_SETTINGS_BUFFER_BINDING) uniform RenderingSettings {
+    mat4x4 projectionMatrix;
+    mat4x4 viewMatrix;
+
+	float cameraFocalLength;
+	float cameraPixelAspectRatio;
+	vec2 cameraPrincipalPointInPixels;
+
+	float cameraNearDistance;
+	float cameraFarDistance;
+
+	int screenWidth;
+	int screenHeight;
+	
+	uint screenTilesPerRow;
+	uint screenTilesPerColumn;
+
+	uint totalGaussians;
+
+	float basePointRadius;
+} renderingSettings;
+
+
+layout(rgba32f, binding = 0) uniform image2D outputTexture;
+
+
+void main() {
+	ivec2 pixelCoordinates = ivec2(gl_GlobalInvocationID.xy);
+//	vec2 normalizedPixelCoordinates = vec2(
+//		float(pixelCoordinates.x) / float(renderingSettings.screenWidth),
+//		float(pixelCoordinates.y) / float(renderingSettings.screenHeight)
+//	);
+
+	// coordinates out of screen
+	if (pixelCoordinates.x >= renderingSettings.screenWidth || pixelCoordinates.y >= renderingSettings.screenHeight) {
+		return;
+	}
+
+	vec3 tileColor = vec3(0.0f);
+
+	uvec2 clusterIndex = uvec2(clamp(
+		floor(vec2(
+			pixelCoordinates.x / float(renderingSettings.screenWidth) * renderingSettings.screenTilesPerColumn,
+			pixelCoordinates.y / float(renderingSettings.screenHeight) * renderingSettings.screenTilesPerRow
+		)),
+		vec2(0.0f),
+		vec2(renderingSettings.screenTilesPerColumn - 1u, renderingSettings.screenTilesPerRow - 1u)
+	));
+
+	tileColor = vec3(
+		float(clusterIndex.x) / float(renderingSettings.screenTilesPerColumn),
+		float(clusterIndex.y) / float(renderingSettings.screenTilesPerRow),
+		0.0f
+	);
+	
+	imageStore(outputTexture, ivec2(pixelCoordinates), vec4(tileColor, 1.0f));
+}

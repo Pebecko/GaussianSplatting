@@ -1,0 +1,62 @@
+// order gaussian splats front to back for rendering
+
+#define SHARED_MEMORY_VALUES_PER_THREAD 2
+#define SHARED_MEMORY_BYTES_PER_THREAD (SHARED_MEMORY_VALUES_PER_THREAD * sizeof(int))
+#define INITIAL_GLOBAL_COMPARISON_BLOCK_SIZE 2ull
+
+
+
+__global__ void finalSharedMemorySwaps(int* inputArray, int* outputArray, size_t arrayLength, size_t globalComparisonBlockSize, size_t initialComparisonBlockSize, bool arrayToAscend) {
+    extern __shared__ int sortingArray[];
+
+    size_t globalThreadIndex = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (globalThreadIndex >= (arrayLength >> 1)) {
+        return;
+    }
+
+    size_t initialComparisonStep = initialComparisonBlockSize >> 1;
+    size_t comparisonBlockIndex = globalThreadIndex / initialComparisonStep;
+    size_t inComparisonBlockIndex = globalThreadIndex % initialComparisonStep;
+
+    size_t globalComparisonBlockIndex = globalThreadIndex / (globalComparisonBlockSize >> 1);  // each block of values only has half as many threads assosiated with it
+    bool globalComparisonBlockToAscend = (globalComparisonBlockIndex % 2) == 0;  // even -> ascending; odd -> descending  (current global comparison block would be sorted in this order if the final array was meant to be in ascending order)
+    bool finalOrderAscending = globalComparisonBlockToAscend == arrayToAscend;  // equivallence (<==>)  (if final array is meant to be in descending order flip globalComparisonBlockToAscend)
+
+    size_t globalFirstValueIndex = comparisonBlockIndex * initialComparisonBlockSize + inComparisonBlockIndex;
+    size_t globalSecondValueIndex = globalFirstValueIndex + initialComparisonStep;
+
+    size_t firstValueIndex;
+    int firstValue, secondValue, temp;
+
+    // loading values into shared memory (each thread loads two)
+    sortingArray[inComparisonBlockIndex] = inputArray[globalFirstValueIndex];
+    sortingArray[inComparisonBlockIndex + initialComparisonStep] = inputArray[globalSecondValueIndex];
+
+    __syncthreads();  // shared memory synchronization
+
+    for (size_t comparisonStep = initialComparisonStep; comparisonStep > 0; comparisonStep >>= 1) {
+        // TODO - figure out a better way to go through the indices
+        firstValueIndex = (inComparisonBlockIndex / comparisonStep) * (comparisonStep << 1) + (inComparisonBlockIndex % comparisonStep);
+
+        firstValue = sortingArray[firstValueIndex];
+        secondValue = sortingArray[firstValueIndex + comparisonStep];
+
+        // swap values if their order is wrong
+        if ((finalOrderAscending && (firstValue > secondValue)) || ((!finalOrderAscending) && (firstValue < secondValue))) {
+            temp = firstValue;
+            firstValue = secondValue;
+            secondValue = temp;
+        }
+
+        sortingArray[firstValueIndex] = firstValue;
+        sortingArray[firstValueIndex + comparisonStep] = secondValue;
+
+        __syncthreads();  // shared memory synchronization
+    }
+
+    // storing values into global memory (each thread stores two)
+    outputArray[globalFirstValueIndex] = sortingArray[inComparisonBlockIndex];
+    outputArray[globalSecondValueIndex] = sortingArray[inComparisonBlockIndex + initialComparisonStep];
+}
+

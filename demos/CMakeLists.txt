@@ -1,2 +1,3 @@
 add_subdirectory(singleSplat)
-add_subdirectory(unoptimizedPointCloud)
+add_subdirectory(unoptimizedGaussianCloud)
+add_subdirectory(tiledGaussianCloud)

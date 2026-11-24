@@ -9,7 +9,7 @@
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
 
-#include "glWrappers/debug.hpp"
+#include "glwrappers/debug.hpp"
 
 #include "gaussianSplatting/glProgramSetup.hpp"
 #include "gaussianSplatting/imguiWrapper.hpp"
@@ -87,7 +87,11 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 		state->rendering.cameraMode = CameraMode((int(state->rendering.cameraMode) + 1) % int(CameraMode::TOTAL_MODES));
 
 		if (state->rendering.cameraMode == CameraMode::FREE_CAMERA) {
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 			glfwSetCursorPos(window, state->rendering.renderingSettings.screenWidth * 0.5, state->rendering.renderingSettings.screenHeight * 0.5);
+		}
+		else {
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		}
 	}
 	if (key == TOGGLE_GUI_KEY && action == GLFW_PRESS) {
@@ -140,6 +144,46 @@ void cursorCallback(GLFWwindow* window, double x, double y) {
 	//state->rendering.currentMouseY = y;
 }
 
+void scrollCallback(GLFWwindow* window, double xOffset, double yOffset) {
+	DemoState* state = (DemoState*) glfwGetWindowUserPointer(window);
+
+	if (state == nullptr) {
+		return;
+	}
+
+	ImGuiIO& io = ImGui::GetIO();
+	if (io.WantCaptureMouse) {
+		return;
+	}
+	
+	state->rendering.renderingSettings.cameraFocalLength -= 64.0 * yOffset;
+
+	if (state->rendering.renderingSettings.cameraFocalLength < 64.0f) {
+		state->rendering.renderingSettings.cameraFocalLength = 64.0f;
+	}
+	else if (state->rendering.renderingSettings.cameraFocalLength > 2048.0f) {
+		state->rendering.renderingSettings.cameraFocalLength = 2048.0f;
+	}
+
+	/*state->rendering.renderingSettings.projectionMatrix = glm::perspective(
+		glm::radians(state->rendering.cameraFovAngleY),
+		state->rendering.renderingSettings.screenAspectRatio(),
+		state->rendering.renderingSettings.cameraNearDistance,
+		state->rendering.renderingSettings.cameraFarDistance
+	);*/
+	state->rendering.renderingSettings.projectionMatrix = state->rendering.renderingSettings.computeProjectionMatrix(
+		state->rendering.renderingSettings.cameraFocalLength,
+		state->rendering.renderingSettings.cameraPixelAspectRatio,
+		state->rendering.renderingSettings.cameraPrincipalPointInPixels,
+		state->rendering.renderingSettings.screenWidth,
+		state->rendering.renderingSettings.screenHeight,
+		state->rendering.renderingSettings.cameraNearDistance,
+		state->rendering.renderingSettings.cameraFarDistance
+	);
+	state->updateFlags.renderingSettingsChanged = true;
+		
+}
+
 
 GLFWwindow* initializeApplication() {
 	// TODO - move setup and cleanup into separate files and functions
@@ -169,6 +213,9 @@ GLFWwindow* initializeApplication() {
 	// remains selected until another one is selected or the window is destroyed
 	glfwMakeContextCurrent(window);
 
+	// glfwSwapInterval(0);  // sets the number of screen updates to wait from the time glfwSwapBuffers has been called before swapping buffers
+
+	//gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
 	gladLoadGL();  // initializing OpenGL extension loader library (glad) because the loader needs current context to load from
 
 	// initializing OpenGL debugging
@@ -197,6 +244,7 @@ GLFWwindow* initializeApplication() {
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 	glfwSetMouseButtonCallback(window, mouseButtonCallback);
 	glfwSetCursorPosCallback(window, cursorCallback);
+	glfwSetScrollCallback(window, scrollCallback);
 
 	// setting up ImGui
 	demos::gui::init(window, "#version 460");
@@ -209,6 +257,9 @@ GLFWwindow* initializeApplication() {
 	// io.IniFilename = nullptr;  // turns off ui persistence
 
 	ImGui::StyleColorsDark();
+
+	//glfwSetWindowMonitor();  // can be used to make window fullscreen
+	//glfwSetWindowSize();  // sets window size
 
 	return window;
 }
@@ -411,6 +462,7 @@ void specifyGuiFrame(DemoState& state) {
 
 
 int main() {
+	// TODO - consider making the window part of the state
 	GLFWwindow* window = initializeApplication();
 
 	OpenGLResources glResources;
